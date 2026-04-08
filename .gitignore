@@ -35,3 +35,6 @@ videos/
 # Logs
 *.log
 test_v2*
+test_kaggle*
+kaggle_debug*
+test_output/
