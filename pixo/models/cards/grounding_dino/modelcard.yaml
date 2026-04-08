@@ -1,0 +1,44 @@
+name: grounding_dino
+description: "Grounding DINO -- open-set object detection with text prompts"
+version: "1.0"
+task: detection
+author: IDEA-Research
+
+source:
+  type: huggingface
+  repo: IDEA-Research/grounding-dino-base
+
+dependencies:
+  python: ">=3.9"
+  packages:
+    - torch>=2.0
+    - transformers>=4.30
+    - opencv-python>=4.8.0
+
+hardware:
+  min_ram_gb: 8
+  recommended_ram_gb: 16
+  min_vram_gb: 4
+  recommended_vram_gb: 8
+  cpu_fallback: true
+
+inputs:
+  - type: image
+    formats: [jpg, png, bmp]
+
+outputs:
+  - type: boxes
+    format: json
+  - type: labels
+    format: json
+  - type: annotated
+    format: image
+
+variants:
+  default:
+    filename: pytorch_model.bin
+    size_mb: 936
+    description: "Base -- SwinT backbone, good accuracy"
+
+checkpoint:
+  supported: false

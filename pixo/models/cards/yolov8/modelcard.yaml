@@ -1,0 +1,62 @@
+name: yolov8
+description: "YOLOv8 -- real-time object detection by Ultralytics"
+version: "8.0"
+task: detection
+author: ultralytics
+
+source:
+  type: huggingface
+  repo: Ultralytics/YOLOv8
+
+dependencies:
+  python: ">=3.9"
+  packages:
+    - ultralytics>=8.0.0
+    - opencv-python>=4.8.0
+
+hardware:
+  min_ram_gb: 2
+  recommended_ram_gb: 8
+  min_vram_gb: 0
+  recommended_vram_gb: 4
+  cpu_fallback: true
+
+inputs:
+  - type: image
+    formats: [jpg, png, bmp, webp]
+  - type: video
+    formats: [mp4, avi, mov, mkv, webm]
+
+outputs:
+  - type: boxes
+    format: json
+  - type: labels
+    format: json
+  - type: annotated
+    format: image/video
+
+variants:
+  default:
+    filename: yolov8n.pt
+    size_mb: 6
+    description: "Nano -- fastest, good for quick tests"
+  small:
+    filename: yolov8s.pt
+    size_mb: 22
+    description: "Small -- good balance of speed and accuracy"
+  medium:
+    filename: yolov8m.pt
+    size_mb: 52
+    description: "Medium -- more accurate, slower"
+  large:
+    filename: yolov8l.pt
+    size_mb: 84
+    description: "Large -- high accuracy"
+  xlarge:
+    filename: yolov8x.pt
+    size_mb: 131
+    description: "Extra large -- best accuracy, needs good hardware"
+
+checkpoint:
+  supported: true
+  every: 500

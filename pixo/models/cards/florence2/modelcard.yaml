@@ -1,0 +1,49 @@
+name: florence2
+description: "Florence-2 -- vision-language model for captioning, detection, and more"
+version: "2.0"
+task: vision-language
+author: microsoft
+
+source:
+  type: huggingface
+  repo: microsoft/Florence-2-base
+
+dependencies:
+  python: ">=3.9"
+  packages:
+    - torch>=2.0
+    - transformers>=4.30
+    - timm
+    - einops
+
+hardware:
+  min_ram_gb: 4
+  recommended_ram_gb: 16
+  min_vram_gb: 0
+  recommended_vram_gb: 8
+  cpu_fallback: true
+
+inputs:
+  - type: image
+    formats: [jpg, png, bmp]
+
+outputs:
+  - type: text
+    format: json
+  - type: boxes
+    format: json
+  - type: labels
+    format: json
+
+variants:
+  default:
+    filename: model.safetensors
+    size_mb: 460
+    description: "Base -- good balance"
+  large:
+    filename: model.safetensors
+    size_mb: 1520
+    description: "Large -- best quality"
+
+checkpoint:
+  supported: false

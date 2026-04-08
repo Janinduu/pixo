@@ -1,0 +1,57 @@
+name: samurai
+description: "SAMURAI -- segment and track anything in video"
+version: "1.0"
+task: video-tracking-segmentation
+author: yangchris11
+
+source:
+  type: github
+  repo: yangchris11/samurai
+  branch: main
+
+dependencies:
+  python: ">=3.9,<3.12"
+  packages:
+    - sam2
+    - numpy>=1.24
+    - opencv-python>=4.8.0
+    - torch>=2.0
+
+hardware:
+  min_ram_gb: 8
+  recommended_ram_gb: 16
+  min_vram_gb: 4
+  recommended_vram_gb: 8
+  cpu_fallback: true
+
+inputs:
+  - type: video
+    formats: [mp4, avi, mov]
+  - type: image
+    formats: [jpg, png, bmp]
+
+outputs:
+  - type: masks
+    format: png
+  - type: tracked_video
+    format: mp4
+  - type: metadata
+    format: json
+
+variants:
+  default:
+    filename: sam2_hiera_large.pt
+    size_mb: 2500
+    description: "Full -- best quality, needs GPU"
+  lite:
+    filename: sam2_hiera_base_plus.pt
+    size_mb: 800
+    description: "Good balance of speed and quality"
+  tiny:
+    filename: sam2_hiera_tiny.pt
+    size_mb: 300
+    description: "Fastest, lower accuracy"
+
+checkpoint:
+  supported: true
+  every: 100

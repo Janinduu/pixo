@@ -1,0 +1,56 @@
+name: depth_anything_v2
+description: "Depth Anything V2 -- monocular depth estimation"
+version: "2.0"
+task: depth-estimation
+author: LiheYoung
+
+source:
+  type: huggingface
+  repo: depth-anything/Depth-Anything-V2-Small-hf
+
+dependencies:
+  python: ">=3.9"
+  packages:
+    - torch>=2.0
+    - transformers>=4.30
+    - opencv-python>=4.8.0
+    - numpy>=1.24
+
+hardware:
+  min_ram_gb: 4
+  recommended_ram_gb: 8
+  min_vram_gb: 0
+  recommended_vram_gb: 4
+  cpu_fallback: true
+
+inputs:
+  - type: image
+    formats: [jpg, png, bmp]
+  - type: video
+    formats: [mp4, avi, mov]
+
+outputs:
+  - type: depth_map
+    format: png
+  - type: depth_raw
+    format: npy
+  - type: visualization
+    format: png
+
+variants:
+  default:
+    filename: model.safetensors
+    size_mb: 99
+    description: "Small -- fast, good quality"
+  base:
+    filename: model.safetensors
+    size_mb: 390
+    description: "Base -- better quality"
+  large:
+    filename: model.safetensors
+    size_mb: 1340
+    description: "Large -- best quality"
+
+checkpoint:
+  supported: true
+  every: 200
