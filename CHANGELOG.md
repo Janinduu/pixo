@@ -4,6 +4,47 @@ All notable changes to pixo will be documented in this file.
 
 ---
 
+## v0.2.0 (2026-04-08)
+
+**All models working + isolated environments + model piping.**
+
+### All 6 Model Runners Now Working
+- **GroundingDINO** — text-prompted object detection (`--prompt "person, car"`)
+  - Uses `transformers` zero-shot-object-detection pipeline
+  - Supports image and video input
+  - Draws bounding boxes with labels and confidence scores
+  - Saves detections.json with all detection data
+- **Florence-2** — vision-language model with multiple tasks
+  - Caption: `--task caption` or `--task detailed_caption`
+  - Detection: `--task detect` (bounding boxes)
+  - OCR: `--task ocr` (text extraction)
+  - Saves structured JSON results per task
+- **SAMURAI** — video object tracking + segmentation
+  - Uses SAM2 mask generation for per-frame segmentation
+  - Consistent color palette across video frames
+  - Saves overlay video + individual masks per frame
+
+### Isolated Environments (opt-in)
+- `pixo pull <model> --isolate` creates a per-model venv at `~/.pixo/envs/<model>/`
+- Automatically installs dependencies from modelcard.yaml
+- `pixo run <model> --isolate` runs in the model's own venv
+- `pixo env-list` shows all environments with sizes
+- `pixo env-clean <model>` removes an environment
+- Default: models still run in user's current environment (no breaking change)
+
+### Model Piping
+- `pixo pipe "grounding_dino -> sam2" --input photo.jpg --prompt "person"`
+- Chain any models together with `->` or `→` separator
+- Pre-built templates: `detect_and_segment`, `detect_and_track`, `segment_and_depth`
+- Automatic output-to-input conversion between compatible models
+- Step-by-step progress display
+
+### Model Card Updates
+- GroundingDINO: default changed to `grounding-dino-tiny` (smaller, faster)
+- Added `base` variant for GroundingDINO
+
+---
+
 ## v0.1.1 (2026-04-08)
 
 **Patch release** — cleanup and metadata fixes.

@@ -6,7 +6,7 @@ author: IDEA-Research
 
 source:
   type: huggingface
-  repo: IDEA-Research/grounding-dino-base
+  repo: IDEA-Research/grounding-dino-tiny
 
 dependencies:
   python: ">=3.9"
@@ -36,9 +36,13 @@ outputs:
 
 variants:
   default:
-    filename: pytorch_model.bin
+    filename: model.safetensors
+    size_mb: 341
+    description: "Tiny -- fast, good accuracy for most tasks"
+  base:
+    filename: model.safetensors
     size_mb: 936
-    description: "Base -- SwinT backbone, good accuracy"
+    description: "Base -- SwinT backbone, best accuracy"
 
 checkpoint:
   supported: false

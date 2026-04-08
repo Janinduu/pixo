@@ -44,6 +44,7 @@ def _get_card(name: str) -> ModelCard:
 @app.command()
 def pull(
     model_name: str = typer.Argument(help="Model to download (e.g. yolov8, sam2:small)"),
+    isolate: bool = typer.Option(False, "--isolate", help="Create an isolated venv for this model"),
 ):
     """Download a model from HuggingFace."""
     name, variant_name = _parse_model_name(model_name)
@@ -56,6 +57,14 @@ def pull(
         raise typer.Exit(1)
 
     download_model(card, variant_name)
+
+    if isolate:
+        from pixo.core.envmanager import create_env, install_deps
+        create_env(name)
+        packages = card.dependencies.get("packages", [])
+        if packages:
+            if not install_deps(name, packages):
+                console.print("[yellow]Environment created but some deps failed. You may need to install manually.[/yellow]")
 
 
 @app.command()
@@ -70,6 +79,7 @@ def run(
     max_cpu: int = typer.Option(None, "--max-cpu", help="Max CPU cores to use"),
     low_memory: bool = typer.Option(False, "--low-memory", help="Use minimal RAM (slower but safe for 4GB machines)"),
     background: bool = typer.Option(False, "--background", help="Run at lowest priority so you can keep working"),
+    isolate: bool = typer.Option(False, "--isolate", help="Run in model's isolated venv (must pixo pull --isolate first)"),
 ):
     """Run inference on an image or video."""
     from pixo.core.optimizer import get_optimized_path, is_optimized
@@ -128,6 +138,14 @@ def run(
         return
 
     # --- Local execution via plugin system ---
+
+    # Check if user wants isolated env execution
+    if isolate:
+        from pixo.core.envmanager import env_exists
+        if not env_exists(name):
+            console.print(f"[red]No isolated environment for '{name}'. Run: pixo pull {name} --isolate[/red]")
+            raise typer.Exit(1)
+
     from pixo.core.guardian import ResourceLimiter, apply_background_mode, suggest_modes, apply_low_memory_cleanup
     from pixo.core.checkpoint import CheckpointManager
 
@@ -764,3 +782,72 @@ def rm(
         console.print(f"[green]Removed {model_name}[/green]")
     else:
         console.print(f"[yellow]{model_name} is not downloaded[/yellow]")
+
+
+@app.command()
+def pipe(
+    pipeline: str = typer.Argument(help='Pipeline: "grounding_dino -> sam2" or template name'),
+    input: str = typer.Option(..., "--input", "-i", help="Input image or video file"),
+    output: str = typer.Option("./pixo_output", "--output", "-o", help="Output directory"),
+    prompt: str = typer.Option("object", "--prompt", "-p", help="Text prompt for detection models"),
+    device: str = typer.Option(None, "--device", "-d", help="Force device: cpu or cuda"),
+):
+    """Chain multiple models together in a pipeline."""
+    from pixo.core.pipeline import parse_pipeline, run_pipeline, list_templates
+
+    input_path = Path(input)
+    if not input_path.exists():
+        console.print(f"[red]File not found: {input}[/red]")
+        raise typer.Exit(1)
+
+    models = parse_pipeline(pipeline)
+    if not models:
+        console.print("[red]Could not parse pipeline. Use: model1 -> model2 or a template name.[/red]")
+        console.print("\n[bold]Available templates:[/bold]")
+        for name, steps in list_templates().items():
+            console.print(f"  {name}: {' → '.join(steps)}")
+        raise typer.Exit(1)
+
+    console.print(f"[bold]Pipeline:[/bold] {' → '.join(models)}")
+    console.print(f"[bold]Input:[/bold] {input_path}")
+
+    options = {"prompt": prompt}
+    run_pipeline(models, input_path, Path(output), options, device=device or "cpu")
+
+    console.print(f"\n[bold green]Pipeline complete![/bold green] Results in: {output}")
+
+
+@app.command(name="env-list")
+def env_list():
+    """Show all isolated model environments."""
+    from pixo.core.envmanager import list_envs
+
+    envs = list_envs()
+    if not envs:
+        console.print("[dim]No isolated environments. Use: pixo pull <model> --isolate[/dim]")
+        return
+
+    table = Table(title="Model Environments")
+    table.add_column("Model", style="bold cyan")
+    table.add_column("Size", justify="right")
+    table.add_column("Path")
+
+    for env in envs:
+        size = f"{env['size_mb']} MB" if env['size_mb'] < 1000 else f"{env['size_mb'] / 1000:.1f} GB"
+        table.add_row(env["name"], size, env["path"])
+
+    console.print(table)
+
+
+@app.command(name="env-clean")
+def env_clean(
+    model_name: str = typer.Argument(help="Model environment to remove"),
+):
+    """Remove and rebuild a model's isolated environment."""
+    from pixo.core.envmanager import delete_env
+
+    if delete_env(model_name):
+        console.print(f"[green]Removed environment for {model_name}[/green]")
+        console.print(f"[dim]Recreate with: pixo pull {model_name} --isolate[/dim]")
+    else:
+        console.print(f"[yellow]No environment found for {model_name}[/yellow]")

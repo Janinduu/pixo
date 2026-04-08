@@ -49,15 +49,12 @@ pixo cloud-status             # Check cloud backend status
 - **Phase 5 (Plugin System)**: `core/plugin.py` with ModelCard + PluginLoader, 6 model cards, 3 working runners (yolov8, sam2, depth_anything_v2), 3 stubs (samurai, grounding_dino, florence2). Old hardcoded system deleted. Core is torch-free.
 - **Phase 6 (Checkpointing)**: `core/checkpoint.py` with CheckpointManager, auto-save every N frames, auto-resume on re-run, `pixo history`/`pixo resume`/`pixo jobs clean`, Ctrl+C pauses gracefully (second Ctrl+C force-quits), deterministic job IDs, error recovery.
 - **Phase 7.1 (Standard Output)**: `core/output.py` with OutputFormatter, unified output structure (results.json, summary.txt, visualizations/, raw/, exports/), COCO export, CSV export, `pixo view` command.
+- **Phase 5.2 (Isolated Envs)**: `core/envmanager.py`, per-model venvs via `--isolate` flag, `pixo env-list`, `pixo env-clean`.
+- **Phase 7.2 (Model Piping)**: `core/pipeline.py`, `pixo pipe "grounding_dino -> sam2"`, pre-built templates, automatic converters.
+- **All 6 runners working**: GroundingDINO (text-prompted detection), Florence-2 (captioning/detection/OCR), SAMURAI (video tracking via SAM2).
 
-### In Progress (v0.1 release path)
+### Post-Launch (v0.3+)
 
-- **v0.1.0 Release Prep**: README, LICENSE, `pixo upgrade`, pyproject.toml cleanup, end-to-end testing
-
-### Post-Launch (v0.2+)
-
-- **Phase 5.2 (Isolated Envs)**: Per-model venvs (opt-in via `--isolate`)
-- **Phase 7.2 (Model Piping)**: `pixo pipe "grounding_dino → sam2 → samurai"`
 - **Phase 8 (Web Dashboard)**: Optional install, FastAPI + React
 
 ### Key Design Patterns

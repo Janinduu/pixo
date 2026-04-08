@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixo"
-version = "0.1.1"
+version = "0.2.0"
 description = "Ollama for Computer Vision — run any heavy CV model on any laptop without freezing"
 readme = "README.md"
 requires-python = ">=3.9"
