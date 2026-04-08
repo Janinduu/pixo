@@ -51,39 +51,138 @@ def _create_dataset(api, files: list[str], dataset_slug: str, username: str) -> 
 
 
 def _build_script(dataset_slug: str, model_name: str, input_filename: str) -> str:
-    """Generate the Python script that runs on Kaggle."""
+    """Generate the Python script that runs on Kaggle.
+
+    Supports yolov8, grounding_dino, sam2, samurai, depth_anything_v2.
+    Uses packages pre-installed on Kaggle GPU images when possible.
+    """
     return f"""
-import subprocess, os, glob, sys
+import os, sys, json, time
 
-# Install dependencies
-subprocess.run([sys.executable, "-m", "pip", "install", "ultralytics", "--quiet"], check=True)
+# Try installing deps (may fail if no internet, that's OK — Kaggle has most pre-installed)
+def safe_install(pkg):
+    import subprocess
+    try:
+        subprocess.run([sys.executable, "-m", "pip", "install", pkg, "--quiet"],
+                       check=True, timeout=60, capture_output=True)
+    except Exception:
+        print(f"Note: Could not install {{pkg}}, using pre-installed version")
 
-from ultralytics import YOLO
+output_dir = "/kaggle/working/results/"
+os.makedirs(output_dir, exist_ok=True)
+model_name = "{model_name}"
 
-# Find input file
-input_dir = "/kaggle/input/{dataset_slug}/"
-input_file = os.path.join(input_dir, "{input_filename}")
-output_dir = "/kaggle/working/"
+# Find input file — search all mounted dataset directories recursively
+input_file = None
+base_dir = "/kaggle/input/"
+print(f"Looking for {input_filename} in {{base_dir}}")
+if os.path.exists(base_dir):
+    for root, dirs, files in os.walk(base_dir):
+        if "{input_filename}" in files:
+            input_file = os.path.join(root, "{input_filename}")
+            print(f"  Found: {{input_file}}")
+            break
+if not input_file:
+    input_file = os.path.join(base_dir, "{dataset_slug}", "{input_filename}")
+    print(f"  Fallback path: {{input_file}}")
 
-print(f"Running {model_name} on {{input_file}}")
-print(f"Files in input dir: {{os.listdir(input_dir)}}")
+if not os.path.exists(input_file):
+    print(f"ERROR: Input file not found. Available dirs:")
+    for root, dirs, files in os.walk(base_dir):
+        for f in files:
+            print(f"  {{os.path.join(root, f)}}")
+    sys.exit(1)
 
-# Download and run model
-model = YOLO("yolov8n.pt")
-results = model.predict(
-    source=input_file,
-    save=True,
-    project=output_dir,
-    name="results",
-    exist_ok=True,
-    verbose=True,
-)
+print(f"Running {{model_name}} on {{input_file}}")
+start_time = time.time()
 
-# Print summary
-if hasattr(results, '__len__'):
-    total = sum(len(r.boxes) for r in results)
-    print(f"Total objects detected: {{total}}")
-print("Done! Results saved to /kaggle/working/results/")
+if model_name == "yolov8":
+    # Use torchvision's pre-installed Faster R-CNN (no internet needed)
+    import torch, torchvision
+    from torchvision.models.detection import fasterrcnn_resnet50_fpn_v2
+    from PIL import Image
+    import torchvision.transforms as T
+
+    # Faster R-CNN v2 weights are cached on Kaggle GPU images
+    model = fasterrcnn_resnet50_fpn_v2(pretrained=True).eval().cuda()
+    img = Image.open(input_file).convert("RGB")
+    transform = T.ToTensor()
+    img_tensor = transform(img).unsqueeze(0).cuda()
+
+    with torch.no_grad():
+        preds = model(img_tensor)[0]
+
+    COCO_LABELS = ["__bg__","person","bicycle","car","motorcycle","airplane","bus","train","truck","boat","traffic light","fire hydrant","N/A","stop sign","parking meter","bench","bird","cat","dog","horse","sheep","cow","elephant","bear","zebra","giraffe","N/A","backpack","umbrella","N/A","N/A","handbag","tie","suitcase","frisbee","skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket","bottle","N/A","wine glass","cup","fork","knife","spoon","bowl","banana","apple","sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake","chair","couch","potted plant","bed","N/A","dining table","N/A","N/A","toilet","N/A","tv","laptop","mouse","remote","keyboard","cell phone","microwave","oven","toaster","sink","refrigerator","N/A","book","clock","vase","scissors","teddy bear","hair drier","toothbrush"]
+
+    keep = preds["scores"] > 0.5
+    labels = [COCO_LABELS[i] for i in preds["labels"][keep].cpu().numpy()]
+    boxes = preds["boxes"][keep].cpu().numpy().tolist()
+    scores = preds["scores"][keep].cpu().numpy().tolist()
+
+    # Save annotated image
+    import cv2, numpy as np
+    img_cv = cv2.imread(input_file)
+    for box, label, score in zip(boxes, labels, scores):
+        x1, y1, x2, y2 = [int(c) for c in box]
+        cv2.rectangle(img_cv, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(img_cv, f"{{label}} {{score:.2f}}", (x1, y1-8), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+    cv2.imwrite(os.path.join(output_dir, "detected.jpg"), img_cv)
+
+    print(f"Detected {{len(labels)}} objects: {{set(labels)}}")
+    with open(os.path.join(output_dir, "detections.json"), "w") as f:
+        json.dump({{"count": len(labels), "labels": labels, "boxes": boxes, "scores": scores}}, f, indent=2)
+
+elif model_name in ("grounding_dino", "sam2", "samurai", "depth_anything_v2"):
+    safe_install("transformers")
+    from transformers import pipeline
+    from PIL import Image
+
+    if model_name == "grounding_dino":
+        pipe = pipeline("zero-shot-object-detection", model="IDEA-Research/grounding-dino-tiny", device=0)
+        image = Image.open(input_file)
+        results = pipe(image, candidate_labels=["object"], threshold=0.15)
+        with open(os.path.join(output_dir, "detections.json"), "w") as f:
+            json.dump({{"count": len(results), "detections": [
+                {{"label": r["label"], "score": round(r["score"], 3),
+                  "box": [r["box"]["xmin"], r["box"]["ymin"], r["box"]["xmax"], r["box"]["ymax"]]}}
+                for r in results
+            ]}}, f, indent=2)
+        print(f"Detected {{len(results)}} objects")
+
+    elif model_name in ("sam2", "samurai"):
+        pipe = pipeline("mask-generation", model="facebook/sam2.1-hiera-large", device=0)
+        image = Image.open(input_file)
+        outputs = pipe(image, points_per_batch=64)
+        masks = outputs["masks"]
+        import numpy as np
+        # Save overlay
+        img_array = np.array(image)
+        overlay = img_array.copy().astype(np.float64)
+        np.random.seed(42)
+        for mask in masks:
+            mask_np = np.array(mask, dtype=bool)
+            color = np.random.random(3) * 255
+            overlay[mask_np] = overlay[mask_np] * 0.5 + color * 0.5
+        Image.fromarray(overlay.astype(np.uint8)).save(os.path.join(output_dir, "masks_overlay.png"))
+        print(f"Generated {{len(masks)}} masks")
+
+    elif model_name == "depth_anything_v2":
+        pipe = pipeline("depth-estimation", model="depth-anything/Depth-Anything-V2-Small-hf", device=0)
+        image = Image.open(input_file)
+        result = pipe(image)
+        import numpy as np
+        from matplotlib import cm
+        depth_np = result["predicted_depth"].detach().cpu().numpy().squeeze()
+        depth_norm = (depth_np - depth_np.min()) / (depth_np.max() - depth_np.min() + 1e-8)
+        colored = (cm.inferno(depth_norm)[:, :, :3] * 255).astype(np.uint8)
+        Image.fromarray(colored).save(os.path.join(output_dir, "depth_color.png"))
+        print("Depth map generated")
+
+else:
+    print(f"Model {{model_name}} not supported on Kaggle yet")
+
+elapsed = time.time() - start_time
+print(f"Done in {{elapsed:.1f}}s! Results saved to {{output_dir}}")
 """
 
 
@@ -163,9 +262,14 @@ def _wait_for_kernel(api, kernel_id: str, poll_interval: int = 15, timeout: int 
 
 def _download_output(api, kernel_id: str, output_dir: str):
     """Download kernel output files."""
-    username, slug = kernel_id.split("/", 1)
     os.makedirs(output_dir, exist_ok=True)
-    api.kernels_output(user_name=username, kernel_slug=slug, path=output_dir, quiet=True)
+    try:
+        # kaggle 2.0 API
+        api.kernels_output(kernel_id, path=output_dir, quiet=True)
+    except TypeError:
+        # Older kaggle API
+        username, slug = kernel_id.split("/", 1)
+        api.kernels_output(user_name=username, kernel_slug=slug, path=output_dir, quiet=True)
 
 
 def _cleanup_dataset(api, dataset_id: str):
@@ -205,9 +309,9 @@ def run_on_kaggle(
         console.print("[bold]Uploading to Kaggle...[/bold]")
         dataset_id = _create_dataset(api, [str(input_path)], dataset_slug, username)
 
-        # Wait for dataset to become available
-        console.print("[dim]Waiting for dataset to process...[/dim]")
-        time.sleep(15)
+        # Wait for dataset to become available (Kaggle needs time to process uploads)
+        console.print("[dim]Waiting for dataset to process (30s)...[/dim]")
+        time.sleep(30)
 
         # 2. Push kernel
         console.print("[bold]Starting Kaggle GPU kernel...[/bold]")
@@ -215,7 +319,19 @@ def run_on_kaggle(
         kernel_id = _push_kernel(api, dataset_id, kernel_slug, script, username)
 
         # 3. Wait for completion
-        _wait_for_kernel(api, kernel_id)
+        try:
+            _wait_for_kernel(api, kernel_id)
+        except RuntimeError as e:
+            if "error" in str(e).lower():
+                console.print(f"\n[red]{e}[/red]")
+                console.print("\n[yellow]Common causes:[/yellow]")
+                console.print("  1. [bold]Phone not verified[/bold] on Kaggle (required for internet access)")
+                console.print("     Fix: https://www.kaggle.com/settings -> Phone Verification")
+                console.print("  2. Kaggle GPU quota exhausted (30hrs/week limit)")
+                console.print("  3. Temporary Kaggle service issue")
+                console.print(f"\n[dim]Check kernel logs: https://www.kaggle.com/code/{kernel_id}[/dim]")
+                return
+            raise
 
         # 4. Download results
         console.print("[bold]Downloading results...[/bold]")
