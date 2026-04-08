@@ -814,10 +814,10 @@ def pipe(
         console.print("[red]Could not parse pipeline. Use: model1 -> model2 or a template name.[/red]")
         console.print("\n[bold]Available templates:[/bold]")
         for name, steps in list_templates().items():
-            console.print(f"  {name}: {' → '.join(steps)}")
+            console.print(f"  {name}: {' -> '.join(steps)}")
         raise typer.Exit(1)
 
-    console.print(f"[bold]Pipeline:[/bold] {' → '.join(models)}")
+    console.print(f"[bold]Pipeline:[/bold] {' -> '.join(models)}")
     console.print(f"[bold]Input:[/bold] {input_path}")
 
     options = {"prompt": prompt}
