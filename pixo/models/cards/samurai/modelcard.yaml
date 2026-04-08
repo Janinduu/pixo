@@ -5,9 +5,8 @@ task: video-tracking-segmentation
 author: yangchris11
 
 source:
-  type: github
-  repo: yangchris11/samurai
-  branch: main
+  type: huggingface
+  repo: facebook/sam2.1-hiera-large
 
 dependencies:
   python: ">=3.9,<3.12"
@@ -40,17 +39,17 @@ outputs:
 
 variants:
   default:
-    filename: sam2_hiera_large.pt
-    size_mb: 2500
-    description: "Full -- best quality, needs GPU"
+    filename: model.safetensors
+    size_mb: 898
+    description: "Large -- best quality, uses SAM2.1 hiera-large"
   lite:
-    filename: sam2_hiera_base_plus.pt
-    size_mb: 800
-    description: "Good balance of speed and quality"
+    filename: model.safetensors
+    size_mb: 324
+    description: "Base plus -- good balance of speed and quality"
   tiny:
-    filename: sam2_hiera_tiny.pt
-    size_mb: 300
-    description: "Fastest, lower accuracy"
+    filename: model.safetensors
+    size_mb: 156
+    description: "Tiny -- fastest, lower accuracy"
 
 checkpoint:
   supported: true

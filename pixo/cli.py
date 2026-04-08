@@ -80,6 +80,8 @@ def run(
     low_memory: bool = typer.Option(False, "--low-memory", help="Use minimal RAM (slower but safe for 4GB machines)"),
     background: bool = typer.Option(False, "--background", help="Run at lowest priority so you can keep working"),
     isolate: bool = typer.Option(False, "--isolate", help="Run in model's isolated venv (must pixo pull --isolate first)"),
+    prompt: str = typer.Option(None, "--prompt", "-p", help="Text prompt for detection models (e.g. 'person, car')"),
+    task: str = typer.Option(None, "--task", help="Task for multi-task models like Florence-2 (caption, detect, ocr)"),
 ):
     """Run inference on an image or video."""
     from pixo.core.optimizer import get_optimized_path, is_optimized
@@ -193,7 +195,7 @@ def run(
 
     try:
         loaded_model = runner_mod.setup(model_dir, variant.filename, resolved_device)
-    except NotImplementedError as e:
+    except (NotImplementedError, RuntimeError) as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1)
 
@@ -220,12 +222,14 @@ def run(
         ckpt_mgr=ckpt_mgr,
         ckpt_every=ckpt_every,
         resume_from=resume_from,
+        prompt=prompt,
+        task=task,
     )
 
 
 def _run_with_checkpoints(runner_mod, loaded_model, name, input_path, output,
                           resolved_device, limiter, low_memory, job, ckpt_mgr,
-                          ckpt_every, resume_from):
+                          ckpt_every, resume_from, prompt=None, task=None):
     """Execute model with checkpoint saving and Ctrl+C pause support."""
     import signal
     from pixo.core.guardian import apply_low_memory_cleanup
@@ -285,8 +289,13 @@ def _run_with_checkpoints(runner_mod, loaded_model, name, input_path, output,
                 TimeElapsedColumn(),
             ) as progress:
                 prog_task = None
+                run_options = {"device": resolved_device}
+                if prompt:
+                    run_options["prompt"] = prompt
+                if task:
+                    run_options["task"] = task
                 for update in runner_mod.run(loaded_model, str(input_path), run_output_dir,
-                                             {"device": resolved_device}):
+                                             run_options):
                     limiter.wait_if_paused()
 
                     if low_memory:
@@ -679,7 +688,7 @@ def resume(
 
     try:
         loaded_model = runner_mod.setup(model_dir, variant.filename, resolved_device)
-    except NotImplementedError as e:
+    except (NotImplementedError, RuntimeError) as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1)
 

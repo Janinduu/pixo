@@ -41,7 +41,7 @@ def run(model, input_path: str, output_dir: str, options: dict):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     prompt = options.get("prompt", "object")
-    threshold = float(options.get("threshold", 0.3))
+    threshold = float(options.get("threshold", 0.15))
     labels = [l.strip() for l in prompt.split(",")]
 
     suffix = input_path.suffix.lower()

@@ -1,4 +1,9 @@
-"""Florence-2 runner -- vision-language model for captioning, detection, OCR."""
+"""Florence-2 runner -- vision-language model for captioning, detection, OCR.
+
+NOTE: Florence-2's custom HuggingFace code requires transformers<5.0.
+With transformers>=5.0, use --isolate with a pinned environment, or
+install: pip install transformers==4.49.0
+"""
 
 from pathlib import Path
 
@@ -17,7 +22,7 @@ TASKS = {
 
 def setup(model_dir: str, variant: str, device: str):
     """Load Florence-2 model and processor."""
-    from transformers import AutoProcessor, AutoModelForCausalLM
+    import transformers
 
     repo = VARIANT_REPOS["default"]
     model_dir_name = Path(model_dir).name
@@ -25,6 +30,17 @@ def setup(model_dir: str, variant: str, device: str):
         if key in model_dir_name:
             repo = repo_id
             break
+
+    # Check transformers version — Florence-2 custom code is incompatible with v5+
+    major_ver = int(transformers.__version__.split(".")[0])
+    if major_ver >= 5:
+        raise RuntimeError(
+            f"Florence-2 requires transformers<5.0 (you have {transformers.__version__}).\n"
+            f"Fix: pip install transformers==4.49.0\n"
+            f"Or use --isolate to run in an isolated environment with pinned deps."
+        )
+
+    from transformers import AutoProcessor, AutoModelForCausalLM
 
     processor = AutoProcessor.from_pretrained(repo, trust_remote_code=True)
     model = AutoModelForCausalLM.from_pretrained(repo, trust_remote_code=True)
