@@ -108,23 +108,10 @@ pixo/models/cards/your_model/
   run.py           # Two functions: setup() and run()
 ```
 
-See [the plan](files/plan.md) for the full modelcard spec.
-
-## Roadmap
-
-- [x] Phase 1 — Core engine (CLI, model registry, YOLOv8 runner)
-- [x] Phase 2 — ONNX optimization (40% CPU speedup)
-- [x] Phase 3 — Free cloud GPUs (Kaggle + Colab + smart routing)
-- [x] Phase 4 — Resource Guardian (never freeze your laptop)
-- [ ] Phase 5 — Plugin system (easy model addition)
-- [ ] Phase 6 — Checkpointing (never lose progress)
-- [ ] Phase 7 — Standard output format
-- [ ] Phase 8 — Web dashboard (optional)
-
 ## Development
 
 ```bash
-git clone https://github.com/your-username/pixo.git
+git clone https://github.com/Janinduu/pixo.git
 cd pixo
 pip install -e .
 ```
