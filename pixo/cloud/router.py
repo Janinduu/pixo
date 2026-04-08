@@ -35,44 +35,60 @@ def _get_frame_count(input_path: Path) -> int:
     return max(int(size_mb * 30), 30)
 
 
-def estimate_local_time(input_path: Path, has_gpu: bool, is_optimized: bool) -> int:
-    """Rough estimate of local inference time in seconds."""
+# Model complexity tiers — determines how long each model takes per frame
+# Based on actual benchmarks on i5 CPU and Kaggle T4 GPU
+MODEL_SPEED = {
+    # model_name: (cpu_secs_per_frame, gpu_secs_per_frame, cpu_secs_per_image, gpu_secs_per_image)
+    "yolov8":            (0.35, 0.02,   7,    3),
+    "grounding_dino":    (45,   2,     45,    5),
+    "depth_anything_v2": (3,    0.1,    3,    2),
+    "sam2":              (2640, 30,   2640,   60),  # 44 min on CPU for one image
+    "samurai":           (2640, 30,   2640,   60),  # same as sam2
+    "florence2":         (30,   3,     30,    5),
+}
+DEFAULT_SPEED = (1.0, 0.05, 15, 5)
+
+
+def estimate_local_time(input_path: Path, has_gpu: bool, is_optimized: bool,
+                        model_name: str = "") -> int:
+    """Estimate local inference time in seconds, based on model + hardware."""
     suffix = input_path.suffix.lower()
     is_video = suffix in (".mp4", ".avi", ".mov", ".mkv", ".webm")
+    speed = MODEL_SPEED.get(model_name, DEFAULT_SPEED)
 
     if not is_video:
-        return 5 if has_gpu else 15
+        return speed[3] if has_gpu else speed[2]
 
     frames = _get_frame_count(input_path)
-
     if has_gpu:
-        secs_per_frame = 0.05
-    elif is_optimized:
-        secs_per_frame = 0.2
+        secs_per_frame = speed[1]
+    elif is_optimized and model_name == "yolov8":
+        secs_per_frame = speed[0] * 0.6  # ONNX is ~40% faster
     else:
-        secs_per_frame = 0.35
+        secs_per_frame = speed[0]
 
     return int(frames * secs_per_frame)
 
 
-def estimate_cloud_time(input_path: Path) -> int:
+def estimate_cloud_time(input_path: Path, model_name: str = "") -> int:
     """Estimate cloud inference time (GPU + upload/download overhead)."""
     size_mb = input_path.stat().st_size / (1024 * 1024)
+    speed = MODEL_SPEED.get(model_name, DEFAULT_SPEED)
 
     # Upload/download: ~5 MB/s
-    transfer_secs = int(size_mb / 5) * 2  # upload + download
+    transfer_secs = int(size_mb / 5) * 2
 
-    # Kaggle overhead: ~90s for kernel startup + pip install
-    startup = 90
+    # Kaggle overhead: ~60s for kernel startup + model download
+    startup = 60
 
-    # GPU inference on T4: ~0.02s/frame (very fast)
+    # GPU inference on T4
     suffix = input_path.suffix.lower()
     is_video = suffix in (".mp4", ".avi", ".mov", ".mkv", ".webm")
     if is_video:
         frames = _get_frame_count(input_path)
-        inference = int(frames * 0.02)
+        inference = int(frames * speed[1])
     else:
-        inference = 3
+        inference = speed[3]
 
     return startup + transfer_secs + inference
 
@@ -95,7 +111,7 @@ def pick_backend(
     estimates = []
 
     # Local estimate
-    local_secs = estimate_local_time(input_path, profile.has_gpu, is_optimized)
+    local_secs = estimate_local_time(input_path, profile.has_gpu, is_optimized, model_name)
     estimates.append(RouteEstimate(
         backend="local",
         estimated_seconds=local_secs,
@@ -104,7 +120,7 @@ def pick_backend(
 
     # Kaggle estimate
     if kaggle_configured:
-        cloud_secs = estimate_cloud_time(input_path)
+        cloud_secs = estimate_cloud_time(input_path, model_name)
         estimates.append(RouteEstimate(
             backend="kaggle",
             estimated_seconds=cloud_secs,
@@ -120,7 +136,7 @@ def pick_backend(
 
     # Colab estimate
     if colab_configured:
-        cloud_secs = estimate_cloud_time(input_path)
+        cloud_secs = estimate_cloud_time(input_path, model_name)
         estimates.append(RouteEstimate(
             backend="colab",
             estimated_seconds=cloud_secs + 30,  # extra manual overhead
