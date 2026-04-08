@@ -15,9 +15,12 @@ console = Console()
 
 def _get_api(username: str, api_key: str):
     """Create and authenticate a Kaggle API client using provided credentials."""
-    # Set env vars so kaggle API picks them up (avoids needing kaggle.json file)
-    os.environ["KAGGLE_USERNAME"] = username
-    os.environ["KAGGLE_KEY"] = api_key
+    # Support both old (username+key) and new (KGAT_ token) formats
+    if api_key.startswith("KGAT_"):
+        os.environ["KAGGLE_API_TOKEN"] = api_key
+    else:
+        os.environ["KAGGLE_USERNAME"] = username
+        os.environ["KAGGLE_KEY"] = api_key
 
     from kaggle.api.kaggle_api_extended import KaggleApi
     api = KaggleApi()
@@ -120,34 +123,40 @@ def _wait_for_kernel(api, kernel_id: str, poll_interval: int = 15, timeout: int 
     """Poll kernel status until complete or failed."""
     username, slug = kernel_id.split("/", 1)
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        TimeElapsedColumn(),
-    ) as progress:
-        task = progress.add_task("Waiting for Kaggle GPU...", total=None)
-
-        elapsed = 0
-        while elapsed < timeout:
-            status_obj = api.kernels_status(user_name=username, kernel_slug=slug)
-
-            # Handle different API versions
-            if hasattr(status_obj, "status"):
-                status = status_obj.status
-            elif isinstance(status_obj, dict):
-                status = status_obj.get("status", str(status_obj))
-            else:
-                status = str(status_obj)
-
-            progress.update(task, description=f"Kaggle: {status}")
-
-            if status == "complete":
-                return "complete"
-            elif status in ("error", "cancelAcknowledged"):
-                raise RuntimeError(f"Kaggle kernel failed: {status}")
-
+    elapsed = 0
+    while elapsed < timeout:
+        try:
+            # kaggle 2.0 takes a single kernel ref string
+            try:
+                status_obj = api.kernels_status(kernel_id)
+            except TypeError:
+                status_obj = api.kernels_status(user_name=username, kernel_slug=slug)
+        except Exception as e:
+            console.print(f"[dim]Status check: {e}[/dim]")
             time.sleep(poll_interval)
             elapsed += poll_interval
+            continue
+
+        # Handle different API versions
+        if hasattr(status_obj, "status"):
+            status = status_obj.status
+        elif isinstance(status_obj, dict):
+            status = status_obj.get("status", str(status_obj))
+        else:
+            status = str(status_obj)
+
+        console.print(f"\r[dim]Kaggle: {status} ({elapsed}s elapsed)[/dim]", end="")
+
+        status_lower = str(status).lower()
+        if "complete" in status_lower:
+            console.print()
+            return "complete"
+        elif "error" in status_lower or "cancel" in status_lower:
+            console.print()
+            raise RuntimeError(f"Kaggle kernel failed: {status}")
+
+        time.sleep(poll_interval)
+        elapsed += poll_interval
 
     raise TimeoutError(f"Kaggle kernel timed out after {timeout}s")
 

@@ -16,7 +16,9 @@ class KaggleConfig:
 
     @property
     def is_configured(self) -> bool:
-        return bool(self.username and self.api_key)
+        # New token format (KGAT_) only needs key + username
+        # Old format needs both username + key
+        return bool(self.api_key and self.username)
 
 
 @dataclass
