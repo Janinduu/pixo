@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-pixo is "Ollama for Computer Vision" — a free, open-source CLI tool and platform that lets anyone run **any** heavy CV model on **any** laptop without freezing your machine, losing progress, or fighting dependency hell.
+pixo is a free, open-source CLI tool that lets anyone run any computer vision model with one command — without freezing your laptop, losing progress, or fighting dependency hell.
 
 The six core problems pixo solves:
 1. **Laptop freezing** — Resource Guardian caps RAM/CPU/GPU, never lets the machine lock up

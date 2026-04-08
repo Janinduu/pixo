@@ -5,11 +5,11 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pixo"
 version = "0.2.0"
-description = "Ollama for Computer Vision — run any heavy CV model on any laptop without freezing"
+description = "Run any computer vision model with one command — without freezing your laptop"
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
-keywords = ["computer-vision", "yolo", "sam2", "cli", "inference", "gpu", "ollama"]
+keywords = ["computer-vision", "yolo", "sam2", "cli", "inference", "gpu", "deep-learning"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",

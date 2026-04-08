@@ -1,6 +1,6 @@
 # pixo
 
-**Ollama for Computer Vision** — run heavy CV models on any laptop without freezing your machine, losing progress, or fighting dependency hell.
+**Run any computer vision model with one command** — without freezing your laptop, losing progress, or fighting dependency hell.
 
 ```bash
 pip install pixo

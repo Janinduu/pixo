@@ -58,7 +58,7 @@ All notable changes to pixo will be documented in this file.
 
 ## v0.1.0 (2026-04-08)
 
-**Initial release** — the foundation of "Ollama for Computer Vision."
+**Initial release** — the foundation of pixo.
 
 ### Core Engine
 - CLI with `pull`, `run`, `list`, `info`, `doctor`, `rm` commands

@@ -15,7 +15,7 @@ from pixo.core.downloader import download_model, remove_model, is_downloaded, ge
 
 app = typer.Typer(
     name="pixo",
-    help="Ollama for Computer Vision — run heavy CV models on any laptop.",
+    help="Run any computer vision model with one command.",
     no_args_is_help=True,
 )
 console = Console()
@@ -189,6 +189,21 @@ def run(
         raise typer.Exit(1)
 
     model_dir = str(model_path.parent)
+
+    # Model-specific hints
+    if name == "grounding_dino" and not prompt:
+        console.print("\n[yellow]Hint:[/yellow] GroundingDINO needs a text prompt to know what to detect.")
+        console.print("  Add: [cyan]--prompt \"person, car, dog\"[/cyan]")
+        console.print("  Without it, detection results will be poor.\n")
+    if name == "florence2" and not task:
+        console.print("\n[yellow]Hint:[/yellow] Florence-2 supports multiple tasks.")
+        console.print("  [cyan]--task caption[/cyan]   Describe the image")
+        console.print("  [cyan]--task detect[/cyan]    Find objects")
+        console.print("  [cyan]--task ocr[/cyan]       Extract text\n")
+    if name in ("sam2", "samurai") and resolved_device == "cpu":
+        console.print("\n[yellow]Hint:[/yellow] SAM2/SAMURAI is very slow on CPU (10-45 min per image).")
+        console.print("  For faster results: [cyan]--backend kaggle[/cyan] (free GPU, ~1 min)")
+        console.print("  Or use a smaller variant: [cyan]pixo pull sam2:tiny[/cyan]\n")
 
     console.print(f"[bold]Device:[/bold] {resolved_device}")
     console.print(f"[bold]Input:[/bold] {input_path}")
@@ -779,6 +794,132 @@ def upgrade():
         console.print("[green]Upgrade complete![/green]")
     else:
         console.print(f"[red]Upgrade failed:[/red] {result.stderr.strip()}")
+
+
+@app.command()
+def guide():
+    """Show a complete guide on how to use pixo."""
+    from pixo import __version__
+
+    console.print(Panel(
+        f"[bold]pixo v{__version__}[/bold]\n"
+        "Run any computer vision model with one command -- without freezing your laptop.",
+        title="Welcome to pixo",
+        border_style="cyan",
+    ))
+
+    # Getting Started
+    console.print("\n[bold cyan]Getting Started[/bold cyan]\n")
+    console.print("  [bold]1.[/bold] See available models:     [cyan]pixo list[/cyan]")
+    console.print("  [bold]2.[/bold] Check your hardware:      [cyan]pixo doctor[/cyan]")
+    console.print("  [bold]3.[/bold] Download a model:         [cyan]pixo pull yolov8[/cyan]")
+    console.print("  [bold]4.[/bold] Run on an image:          [cyan]pixo run yolov8 --input photo.jpg[/cyan]")
+    console.print("  [bold]5.[/bold] Run on a video:           [cyan]pixo run yolov8 --input video.mp4[/cyan]")
+
+    # Models
+    console.print("\n[bold cyan]Available Models[/bold cyan]\n")
+    model_table = Table(show_header=True, header_style="bold")
+    model_table.add_column("Model", style="cyan")
+    model_table.add_column("What it does")
+    model_table.add_column("Speed (CPU)")
+    model_table.add_column("Example")
+    model_table.add_row("yolov8", "Detect objects (person, car...)", "Fast (~7s/image)", "pixo run yolov8 -i photo.jpg")
+    model_table.add_row("grounding_dino", "Detect anything by text", "Medium (~45s)", "pixo run grounding_dino -i photo.jpg --prompt \"person\"")
+    model_table.add_row("depth_anything_v2", "Estimate depth (near/far)", "Fast (~3s)", "pixo run depth_anything_v2 -i photo.jpg")
+    model_table.add_row("sam2", "Segment everything", "Slow (~10min+)", "pixo run sam2 -i photo.jpg")
+    model_table.add_row("samurai", "Track + segment in video", "Very slow", "pixo run samurai -i video.mp4")
+    model_table.add_row("florence2", "Caption, detect, OCR", "Needs transformers<5.0", "pixo run florence2 -i photo.jpg --task caption")
+    console.print(model_table)
+
+    # Performance
+    console.print("\n[bold cyan]Performance Tips[/bold cyan]\n")
+    console.print("  [bold]Laptop freezing?[/bold]")
+    console.print("    [cyan]pixo run yolov8 -i video.mp4 --low-memory[/cyan]    Process frame-by-frame, less RAM")
+    console.print("    [cyan]pixo run yolov8 -i video.mp4 --background[/cyan]    Lowest priority, laptop stays usable")
+    console.print()
+    console.print("  [bold]Too slow on CPU?[/bold]")
+    console.print("    [cyan]pixo optimize yolov8[/cyan]                         Convert to ONNX (40% faster)")
+    console.print("    [cyan]pixo setup-cloud --kaggle[/cyan]                    Connect free Kaggle GPU (30hrs/week)")
+    console.print("    [cyan]pixo run sam2 -i photo.jpg --backend kaggle[/cyan]  Run on cloud GPU instead")
+    console.print()
+    console.print("  [bold]Model variants (smaller = faster):[/bold]")
+    console.print("    [cyan]pixo pull sam2:tiny[/cyan]                          Smallest, fastest")
+    console.print("    [cyan]pixo pull sam2:small[/cyan]                         Good balance")
+    console.print("    [cyan]pixo pull sam2[/cyan]                               Full quality (default)")
+
+    # Cloud GPUs
+    console.print("\n[bold cyan]Free Cloud GPUs[/bold cyan]\n")
+    console.print("  Kaggle gives you [bold]30 hours/week[/bold] of free T4 GPU.")
+    console.print("  SAM2 on Kaggle GPU: ~1 min. SAM2 on CPU: ~44 min.\n")
+    console.print("  [bold]Setup (one time):[/bold]")
+    console.print("    1. Go to https://www.kaggle.com/settings")
+    console.print("    2. Scroll to API > Create New Token")
+    console.print("    3. Run: [cyan]pixo setup-cloud --kaggle[/cyan]")
+    console.print("    4. Now use: [cyan]pixo run <model> --backend kaggle[/cyan]")
+
+    # Checkpointing
+    console.print("\n[bold cyan]Never Lose Progress[/bold cyan]\n")
+    console.print("  pixo auto-saves progress every 100 frames.\n")
+    console.print("  [bold]Ctrl+C[/bold]        Pause (saves checkpoint, doesn't kill)")
+    console.print("  [bold]Ctrl+C x2[/bold]     Actually quit")
+    console.print("  [cyan]pixo resume[/cyan]    Pick up from where you stopped")
+    console.print("  [cyan]pixo history[/cyan]   See all past jobs and their status")
+
+    # Model Piping
+    console.print("\n[bold cyan]Chain Models Together[/bold cyan]\n")
+    console.print("  Run multiple models in sequence on the same input:\n")
+    console.print("    [cyan]pixo pipe \"yolov8 -> depth_anything_v2\" -i photo.jpg[/cyan]")
+    console.print("    [cyan]pixo pipe \"grounding_dino -> sam2\" -i photo.jpg --prompt \"person\"[/cyan]")
+    console.print()
+    console.print("  [bold]Pre-built templates:[/bold]")
+    console.print("    [cyan]pixo pipe detect_and_segment -i photo.jpg --prompt \"car\"[/cyan]")
+    console.print("    [cyan]pixo pipe segment_and_depth -i photo.jpg[/cyan]")
+
+    # Model-specific
+    console.print("\n[bold cyan]Model-Specific Options[/bold cyan]\n")
+    console.print("  [bold]grounding_dino[/bold] -- needs a text prompt:")
+    console.print("    [cyan]--prompt \"person, car, dog\"[/cyan]   What to detect (required)")
+    console.print()
+    console.print("  [bold]florence2[/bold] -- multi-task model:")
+    console.print("    [cyan]--task caption[/cyan]               Describe the image")
+    console.print("    [cyan]--task detailed_caption[/cyan]      Detailed description")
+    console.print("    [cyan]--task detect[/cyan]                Find objects")
+    console.print("    [cyan]--task ocr[/cyan]                   Extract text")
+
+    # Output
+    console.print("\n[bold cyan]Understanding Output[/bold cyan]\n")
+    console.print("  Every run creates a structured output folder:\n")
+    console.print("    pixo_output/")
+    console.print("      results.json          Machine-readable metadata")
+    console.print("      summary.txt           Human-readable summary")
+    console.print("      visualizations/       Annotated images or video")
+    console.print("      exports/              COCO JSON + CSV exports")
+    console.print()
+    console.print("  [cyan]pixo view <job_id>[/cyan]   Open the output folder")
+
+    # All Commands
+    console.print("\n[bold cyan]All Commands[/bold cyan]\n")
+    cmd_table = Table(show_header=True, header_style="bold")
+    cmd_table.add_column("Command", style="cyan")
+    cmd_table.add_column("What it does")
+    cmd_table.add_row("pixo list", "Show all available models")
+    cmd_table.add_row("pixo info <model>", "Detailed model info and variants")
+    cmd_table.add_row("pixo pull <model>", "Download a model")
+    cmd_table.add_row("pixo run <model> -i <file>", "Run inference")
+    cmd_table.add_row("pixo pipe \"m1 -> m2\" -i <file>", "Chain models together")
+    cmd_table.add_row("pixo doctor", "Check your hardware")
+    cmd_table.add_row("pixo optimize <model>", "Convert to ONNX (faster)")
+    cmd_table.add_row("pixo history", "Show all past jobs")
+    cmd_table.add_row("pixo resume [job_id]", "Resume a paused/failed job")
+    cmd_table.add_row("pixo view <job_id>", "Open job results")
+    cmd_table.add_row("pixo setup-cloud", "Connect Kaggle/Colab")
+    cmd_table.add_row("pixo cloud-status", "Check cloud connections")
+    cmd_table.add_row("pixo rm <model>", "Remove a downloaded model")
+    cmd_table.add_row("pixo upgrade", "Update pixo to latest version")
+    cmd_table.add_row("pixo guide", "Show this guide")
+    console.print(cmd_table)
+
+    console.print("\n[dim]More info: https://github.com/Janinduu/pixo[/dim]\n")
 
 
 @app.command()
