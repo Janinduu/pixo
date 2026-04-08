@@ -94,6 +94,21 @@ if not os.path.exists(input_file):
     sys.exit(1)
 
 print(f"Running {{model_name}} on {{input_file}}")
+
+# Detect best device — check CUDA capability compatibility
+import torch
+device = "cpu"
+if torch.cuda.is_available():
+    cap = torch.cuda.get_device_capability(0)
+    gpu_name = torch.cuda.get_device_name(0)
+    # PyTorch 2.x requires sm_70+ (V100, T4, A100, etc.)
+    if cap[0] >= 7:
+        device = "cuda"
+        print(f"Using GPU: {{gpu_name}} (sm_{{cap[0]}}{{cap[1]}})")
+    else:
+        print(f"GPU {{gpu_name}} (sm_{{cap[0]}}{{cap[1]}}) too old for PyTorch, using CPU")
+else:
+    print("No GPU detected, using CPU")
 start_time = time.time()
 
 if model_name == "yolov8":
@@ -104,10 +119,10 @@ if model_name == "yolov8":
     import torchvision.transforms as T
 
     # Faster R-CNN v2 weights are cached on Kaggle GPU images
-    model = fasterrcnn_resnet50_fpn_v2(pretrained=True).eval().cuda()
+    model = fasterrcnn_resnet50_fpn_v2(pretrained=True).eval().to(device)
     img = Image.open(input_file).convert("RGB")
     transform = T.ToTensor()
-    img_tensor = transform(img).unsqueeze(0).cuda()
+    img_tensor = transform(img).unsqueeze(0).to(device)
 
     with torch.no_grad():
         preds = model(img_tensor)[0]
@@ -138,7 +153,7 @@ elif model_name in ("grounding_dino", "sam2", "samurai", "depth_anything_v2"):
     from PIL import Image
 
     if model_name == "grounding_dino":
-        pipe = pipeline("zero-shot-object-detection", model="IDEA-Research/grounding-dino-tiny", device=0)
+        pipe = pipeline("zero-shot-object-detection", model="IDEA-Research/grounding-dino-tiny", device=0 if device == "cuda" else -1)
         image = Image.open(input_file)
         results = pipe(image, candidate_labels=["object"], threshold=0.15)
         with open(os.path.join(output_dir, "detections.json"), "w") as f:
@@ -150,7 +165,7 @@ elif model_name in ("grounding_dino", "sam2", "samurai", "depth_anything_v2"):
         print(f"Detected {{len(results)}} objects")
 
     elif model_name in ("sam2", "samurai"):
-        pipe = pipeline("mask-generation", model="facebook/sam2.1-hiera-large", device=0)
+        pipe = pipeline("mask-generation", model="facebook/sam2.1-hiera-large", device=0 if device == "cuda" else -1)
         image = Image.open(input_file)
         outputs = pipe(image, points_per_batch=64)
         masks = outputs["masks"]
@@ -167,7 +182,7 @@ elif model_name in ("grounding_dino", "sam2", "samurai", "depth_anything_v2"):
         print(f"Generated {{len(masks)}} masks")
 
     elif model_name == "depth_anything_v2":
-        pipe = pipeline("depth-estimation", model="depth-anything/Depth-Anything-V2-Small-hf", device=0)
+        pipe = pipeline("depth-estimation", model="depth-anything/Depth-Anything-V2-Small-hf", device=0 if device == "cuda" else -1)
         image = Image.open(input_file)
         result = pipe(image)
         import numpy as np
@@ -202,6 +217,7 @@ def _push_kernel(api, dataset_id: str, kernel_slug: str, script: str, username: 
             "kernel_type": "script",
             "is_private": True,
             "enable_gpu": True,
+            "accelerator": "gpu_t4x1",  # Request T4 GPU specifically
             "enable_internet": True,
             "dataset_sources": [dataset_id],
             "kernel_sources": [],
@@ -262,14 +278,28 @@ def _wait_for_kernel(api, kernel_id: str, poll_interval: int = 15, timeout: int 
 
 def _download_output(api, kernel_id: str, output_dir: str):
     """Download kernel output files."""
+    import locale
     os.makedirs(output_dir, exist_ok=True)
+
+    # Force UTF-8 to handle Unicode in Kaggle logs (progress bars etc.)
+    old_encoding = os.environ.get("PYTHONUTF8")
+    os.environ["PYTHONUTF8"] = "1"
+
     try:
-        # kaggle 2.0 API
-        api.kernels_output(kernel_id, path=output_dir, quiet=True)
-    except TypeError:
-        # Older kaggle API
-        username, slug = kernel_id.split("/", 1)
-        api.kernels_output(user_name=username, kernel_slug=slug, path=output_dir, quiet=True)
+        try:
+            api.kernels_output(kernel_id, path=output_dir, quiet=True)
+        except TypeError:
+            username, slug = kernel_id.split("/", 1)
+            api.kernels_output(user_name=username, kernel_slug=slug, path=output_dir, quiet=True)
+        except UnicodeEncodeError:
+            # Kaggle logs contain Unicode progress bars that fail on Windows cp1252
+            # Download without log — the actual output files are what we need
+            console.print("[dim]Note: Could not save kernel log (encoding issue), results downloaded.[/dim]")
+    finally:
+        if old_encoding is None:
+            os.environ.pop("PYTHONUTF8", None)
+        else:
+            os.environ["PYTHONUTF8"] = old_encoding
 
 
 def _cleanup_dataset(api, dataset_id: str):
