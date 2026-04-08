@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixo"
-version = "0.1.0"
+version = "0.1.1"
 description = "Ollama for Computer Vision — run any heavy CV model on any laptop without freezing"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -41,9 +41,9 @@ vision = ["transformers>=4.40.0", "torch>=2.0", "opencv-python>=4.8.0", "matplot
 all = ["pixo[yolo,onnx,cloud,vision]"]
 
 [project.urls]
-Homepage = "https://github.com/pixo-cv/pixo"
-Repository = "https://github.com/pixo-cv/pixo"
-Issues = "https://github.com/pixo-cv/pixo/issues"
+Homepage = "https://github.com/Janinduu/pixo"
+Repository = "https://github.com/Janinduu/pixo"
+Issues = "https://github.com/Janinduu/pixo/issues"
 
 [project.scripts]
 pixo = "pixo.cli:app"
