@@ -300,4 +300,8 @@ async def progress_ws(websocket: WebSocket, job_id: str):
 
 UI_DIR = Path(__file__).parent / "ui" / "dist"
 if UI_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(UI_DIR), html=True), name="ui")
+    @app.get("/")
+    async def serve_index():
+        return FileResponse(str(UI_DIR / "index.html"))
+
+    app.mount("/assets", StaticFiles(directory=str(UI_DIR / "assets")), name="assets")
