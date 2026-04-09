@@ -67,11 +67,14 @@ class RunResponse(BaseModel):
 
 @app.get("/api/models")
 def get_models():
-    """List all available models."""
+    """List all available models, grouped by family."""
     import pixo
     models = pixo.list_models()
-    return [
-        {
+
+    # Build individual model list
+    model_list = []
+    for m in models:
+        model_list.append({
             "name": m.name,
             "description": m.description,
             "task": m.task,
@@ -79,9 +82,87 @@ def get_models():
             "variants": m.variants,
             "default_size_mb": m.default_size_mb,
             "downloaded": m.downloaded,
-        }
-        for m in models
-    ]
+        })
+
+    return model_list
+
+
+# Model family grouping for the dashboard
+MODEL_FAMILIES = {
+    "yolo": {
+        "display_name": "YOLO",
+        "description": "Real-time object detection. Identifies and locates objects in images and video with bounding boxes.",
+        "task": "detection",
+        "versions": ["yolov8", "yolov11", "yolov12"],
+    },
+    "sam": {
+        "display_name": "SAM",
+        "description": "Segment Anything Model. Click or prompt to segment any object with pixel-perfect masks.",
+        "task": "segmentation",
+        "versions": ["sam2"],
+    },
+    "grounding_dino": {
+        "display_name": "Grounding DINO",
+        "description": "Text-prompted object detection. Describe what to find in natural language -- it locates it.",
+        "task": "detection",
+        "versions": ["grounding_dino"],
+    },
+    "depth": {
+        "display_name": "Depth Anything",
+        "description": "Monocular depth estimation. Generates depth maps from single images -- no stereo camera needed.",
+        "task": "depth-estimation",
+        "versions": ["depth_anything_v2"],
+    },
+    "florence": {
+        "display_name": "Florence",
+        "description": "Versatile vision-language model. Captioning, OCR, object detection, and more -- all in one model.",
+        "task": "vision-language",
+        "versions": ["florence2"],
+    },
+    "samurai": {
+        "display_name": "SAMURAI",
+        "description": "Video object tracking built on SAM2. Track any object across video frames automatically.",
+        "task": "video-tracking-segmentation",
+        "versions": ["samurai"],
+    },
+    "rtdetr": {
+        "display_name": "RT-DETR",
+        "description": "Real-Time Detection Transformer. End-to-end transformer detector -- no NMS needed, very accurate.",
+        "task": "detection",
+        "versions": ["rtdetr"],
+    },
+}
+
+
+@app.get("/api/models/families")
+def get_model_families():
+    """Get models grouped by family for the dashboard."""
+    import pixo
+    all_models = {m.name: m for m in pixo.list_models()}
+
+    families = []
+    for family_key, family_info in MODEL_FAMILIES.items():
+        versions = []
+        for model_name in family_info["versions"]:
+            if model_name in all_models:
+                m = all_models[model_name]
+                versions.append({
+                    "name": m.name,
+                    "variants": m.variants,
+                    "default_size_mb": m.default_size_mb,
+                    "downloaded": m.downloaded,
+                })
+
+        if versions:
+            families.append({
+                "family": family_key,
+                "display_name": family_info["display_name"],
+                "description": family_info["description"],
+                "task": family_info["task"],
+                "versions": versions,
+            })
+
+    return families
 
 
 @app.get("/api/models/{name}")

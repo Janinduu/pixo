@@ -127,11 +127,16 @@ const taskLabels = {
   'video-tracking-segmentation': 'Video Tracking',
 }
 
-function ModelCard({ model, onRun }) {
-  const TaskIcon = taskIcons[model.task] || Box
-  const sizeLabel = model.default_size_mb >= 1000
-    ? `${(model.default_size_mb / 1000).toFixed(1)} GB`
-    : `${model.default_size_mb} MB`
+function FamilyCard({ family, onRun }) {
+  const TaskIcon = taskIcons[family.task] || Box
+  const hasMultipleVersions = family.versions.length > 1
+  const [selectedVersion, setSelectedVersion] = useState(0)
+  const currentModel = family.versions[selectedVersion]
+  const hasMultipleVariants = currentModel?.variants?.length > 1
+
+  const sizeLabel = currentModel?.default_size_mb >= 1000
+    ? `${(currentModel.default_size_mb / 1000).toFixed(1)} GB`
+    : `${currentModel?.default_size_mb || 0} MB`
 
   return (
     <Card className="group hover:border-zinc-300 hover:shadow-sm transition-all duration-200">
@@ -142,13 +147,13 @@ function ModelCard({ model, onRun }) {
               <TaskIcon size={14} strokeWidth={1.5} className="text-zinc-500" />
             </div>
             <div>
-              <CardTitle className="text-[14px]">{model.name}</CardTitle>
+              <CardTitle className="text-[14px]">{family.display_name}</CardTitle>
               <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
-                {taskLabels[model.task] || model.task}
+                {taskLabels[family.task] || family.task}
               </span>
             </div>
           </div>
-          {model.downloaded && (
+          {currentModel?.downloaded && (
             <Badge variant="success" className="gap-1">
               <CheckCircle2 size={10} />
               Ready
@@ -157,12 +162,47 @@ function ModelCard({ model, onRun }) {
         </div>
       </CardHeader>
       <CardContent>
-        <p className="text-[13px] text-zinc-500 leading-relaxed line-clamp-2 mb-4">
-          {model.description}
+        <p className="text-[13px] text-zinc-500 leading-relaxed line-clamp-2 mb-3">
+          {family.description}
         </p>
-        <div className="flex items-center justify-between">
+
+        {/* Version selector (only if multiple versions like YOLO) */}
+        {hasMultipleVersions && (
+          <div className="mb-3">
+            <span className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1.5">Version</span>
+            <div className="flex gap-1">
+              {family.versions.map((v, i) => (
+                <button key={v.name} onClick={() => setSelectedVersion(i)}
+                  className={cn(
+                    "px-2.5 py-1 rounded text-[12px] font-medium transition-all",
+                    selectedVersion === i
+                      ? "bg-zinc-900 text-white"
+                      : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
+                  )}>
+                  {v.name.replace('yolov', 'v').replace('yolo', '')}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Variant chips */}
+        {hasMultipleVariants && (
+          <div className="mb-3">
+            <span className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1.5">Variants</span>
+            <div className="flex flex-wrap gap-1">
+              {currentModel.variants.map(v => (
+                <span key={v} className="px-2 py-0.5 rounded bg-zinc-50 border border-zinc-200 text-[11px] text-zinc-500">
+                  {v}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between mt-2">
           <span className="text-[12px] text-zinc-400">{sizeLabel}</span>
-          <Button variant="secondary" size="sm" onClick={() => onRun(model.name)}>
+          <Button variant="secondary" size="sm" onClick={() => onRun(currentModel.name)}>
             <Play size={12} />
             Run
           </Button>
@@ -173,23 +213,25 @@ function ModelCard({ model, onRun }) {
 }
 
 function ModelsPage({ setPage, setRunModel }) {
-  const [models, setModels] = useState([])
+  const [families, setFamilies] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`${API}/models`).then(r => r.json()).then(data => { setModels(data); setLoading(false) })
+    fetch(`${API}/models/families`).then(r => r.json()).then(data => { setFamilies(data); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
 
   if (loading) return <LoadingState />
 
+  const totalModels = families.reduce((acc, f) => acc + f.versions.length, 0)
+
   return (
     <div>
       <PageHeader
         title="Models"
-        description={`${models.length} model${models.length !== 1 ? 's' : ''} available`}
+        description={`${totalModels} models in ${families.length} families`}
       />
-      {models.length === 0 ? (
+      {families.length === 0 ? (
         <EmptyState
           icon={Layers}
           title="No models found"
@@ -202,8 +244,8 @@ function ModelsPage({ setPage, setRunModel }) {
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {models.map(m => (
-            <ModelCard key={m.name} model={m} onRun={(name) => { setRunModel(name); setPage('run') }} />
+          {families.map(f => (
+            <FamilyCard key={f.family} family={f} onRun={(name) => { setRunModel(name); setPage('run') }} />
           ))}
         </div>
       )}
