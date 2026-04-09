@@ -1,6 +1,16 @@
-# pixo
+<p align="center">
+  <img src="logo.svg" alt="pixo — vision, simplified." width="320" />
+</p>
 
-**Run any computer vision model with one command** — without freezing your laptop, losing progress, or fighting dependency hell.
+<p align="center">
+  <strong>Run any computer vision model with one command</strong> — without freezing your laptop, losing progress, or fighting dependency hell.
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/pixo/"><img src="https://img.shields.io/pypi/v/pixo?color=7F77DD&style=flat-square" alt="PyPI" /></a>
+  <a href="https://pypi.org/project/pixo/"><img src="https://img.shields.io/pypi/pyversions/pixo?color=7F77DD&style=flat-square" alt="Python" /></a>
+  <a href="https://github.com/Janinduu/pixo/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Janinduu/pixo?color=7F77DD&style=flat-square" alt="License" /></a>
+</p>
 
 ```bash
 pip install pixo

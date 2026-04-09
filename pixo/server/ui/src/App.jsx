@@ -1,109 +1,277 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import {
+  Layers, Play, Briefcase, Cpu, Upload, CheckCircle2, XCircle,
+  Loader2, HardDrive, MonitorSmartphone, CircuitBoard,
+  Cloud, FileImage, Eye, Zap, Box,
+  BarChart3, Timer, Crosshair, GitBranch
+} from 'lucide-react'
+import { Button } from './components/ui/button'
+import { Card, CardHeader, CardTitle, CardContent } from './components/ui/card'
+import { Badge } from './components/ui/badge'
+import { Progress } from './components/ui/progress'
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from './components/ui/table'
+import { Input, Select } from './components/ui/input'
+import { cn } from './lib/utils'
 import './index.css'
 
 const API = '/api'
 
+// ─── Logo ───────────────────────────────────────────────────────────
+
+function PixoLogo({ size = 28 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 76 76">
+      {/* Row 1 */}
+      <rect x="0"  y="0"  width="22" height="22" rx="5" fill="#7F77DD"/>
+      <rect x="27" y="0"  width="22" height="22" rx="5" fill="#7F77DD"/>
+      <rect x="54" y="0"  width="22" height="22" rx="5" fill="#7F77DD"/>
+      {/* Row 2 */}
+      <rect x="0"  y="27" width="22" height="22" rx="5" fill="#7F77DD"/>
+      <rect x="27" y="27" width="22" height="22" rx="5" fill="#C8C4F0" opacity="0.6"/>
+      <rect x="54" y="27" width="22" height="22" rx="5" fill="#7F77DD"/>
+      {/* Row 3 */}
+      <rect x="0"  y="54" width="22" height="22" rx="5" fill="#534AB7"/>
+      <rect x="27" y="54" width="22" height="22" rx="5" fill="#534AB7"/>
+      <rect x="54" y="54" width="22" height="22" rx="5" fill="#534AB7"/>
+    </svg>
+  )
+}
+
+// ─── Navigation ─────────────────────────────────────────────────────
+
 function Nav({ page, setPage }) {
   const tabs = [
-    ['models', 'Models'],
-    ['run', 'Run'],
-    ['jobs', 'Jobs'],
-    ['hardware', 'Hardware'],
+    { key: 'models', label: 'Models', icon: Layers },
+    { key: 'run', label: 'Run', icon: Play },
+    { key: 'jobs', label: 'Jobs', icon: Briefcase },
+    { key: 'hardware', label: 'Hardware', icon: Cpu },
   ]
   return (
-    <nav className="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center gap-6">
-      <h1 className="text-xl font-bold text-cyan-400 mr-4 cursor-pointer" onClick={() => setPage('models')}>pixo</h1>
-      {tabs.map(([key, label]) => (
-        <button key={key} onClick={() => setPage(key)}
-          className={`px-3 py-1 rounded text-sm ${page === key ? 'bg-cyan-600 text-white' : 'text-slate-400 hover:text-white'}`}>
-          {label}
+    <nav className="sticky top-0 z-50 border-b border-zinc-200 bg-white/80 backdrop-blur-xl">
+      <div className="px-8 h-14 flex items-center gap-1">
+        <button onClick={() => setPage('models')}
+          className="flex items-center gap-3 mr-8 hover:opacity-80 transition-opacity cursor-pointer">
+          <PixoLogo size={36} />
+          <div className="flex flex-col items-start">
+            <span className="text-lg font-bold leading-none" style={{ color: '#1a1a2e', letterSpacing: '-0.5px' }}>pixo</span>
+            <span className="text-[11px] leading-none mt-1" style={{ color: '#7F77DD' }}>vision, simplified.</span>
+          </div>
         </button>
-      ))}
+        <div className="flex items-center gap-0.5">
+          {tabs.map(({ key, label, icon: Icon }) => (
+            <button key={key} onClick={() => setPage(key)}
+              className={cn(
+                "px-3 py-1.5 rounded-md text-[13px] font-medium flex items-center gap-1.5 transition-all cursor-pointer",
+                page === key
+                  ? "bg-zinc-100 text-zinc-900"
+                  : "text-zinc-400 hover:text-zinc-600 hover:bg-zinc-50"
+              )}>
+              <Icon size={14} strokeWidth={1.5} />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
     </nav>
   )
 }
 
-function ModelCard({ model, onRun }) {
-  const taskColors = {
-    'detection': 'bg-green-600', 'segmentation': 'bg-purple-600',
-    'depth-estimation': 'bg-blue-600', 'vision-language': 'bg-orange-600',
-    'video-tracking-segmentation': 'bg-pink-600',
+// ─── Status Indicator ───────────────────────────────────────────────
+
+function StatusIndicator({ status }) {
+  const config = {
+    complete: { color: 'bg-emerald-500', label: 'Complete' },
+    running: { color: 'bg-amber-400 animate-pulse', label: 'Running' },
+    error: { color: 'bg-red-500', label: 'Error' },
+    paused: { color: 'bg-zinc-400', label: 'Paused' },
   }
+  const { color, label } = config[status] || { color: 'bg-zinc-300', label: status }
   return (
-    <div className="bg-slate-800 rounded-lg p-5 border border-slate-700 hover:border-cyan-500 transition">
-      <div className="flex justify-between items-start mb-3">
-        <h3 className="text-lg font-semibold text-white">{model.name}</h3>
-        {model.downloaded && <span className="text-xs bg-green-700 text-green-200 px-2 py-0.5 rounded">downloaded</span>}
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cn("w-1.5 h-1.5 rounded-full", color)} />
+      <span className="text-zinc-600 capitalize text-[13px]">{label}</span>
+    </span>
+  )
+}
+
+// ─── Empty State ────────────────────────────────────────────────────
+
+function EmptyState({ icon: Icon, title, description, action }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <div className="w-12 h-12 rounded-xl bg-zinc-50 border border-zinc-200 flex items-center justify-center mb-4">
+        <Icon size={20} strokeWidth={1.5} className="text-zinc-400" />
       </div>
-      <span className={`text-xs px-2 py-0.5 rounded text-white ${taskColors[model.task] || 'bg-slate-600'}`}>{model.task}</span>
-      <p className="text-sm text-slate-400 mt-3">{model.description}</p>
-      <div className="flex justify-between items-center mt-4">
-        <span className="text-xs text-slate-500">{model.default_size_mb}MB</span>
-        <button onClick={() => onRun(model.name)}
-          className="px-3 py-1 bg-cyan-600 hover:bg-cyan-500 text-white text-sm rounded">
-          Run
-        </button>
-      </div>
+      <p className="text-[14px] font-medium text-zinc-600 mb-1">{title}</p>
+      <p className="text-[13px] text-zinc-400 max-w-xs">{description}</p>
+      {action}
     </div>
+  )
+}
+
+// ─── Models Page ────────────────────────────────────────────────────
+
+const taskIcons = {
+  'detection': Crosshair,
+  'segmentation': GitBranch,
+  'depth-estimation': Layers,
+  'vision-language': Eye,
+  'video-tracking-segmentation': Play,
+}
+
+const taskLabels = {
+  'detection': 'Detection',
+  'segmentation': 'Segmentation',
+  'depth-estimation': 'Depth',
+  'vision-language': 'Vision + Language',
+  'video-tracking-segmentation': 'Video Tracking',
+}
+
+function ModelCard({ model, onRun }) {
+  const TaskIcon = taskIcons[model.task] || Box
+  const sizeLabel = model.default_size_mb >= 1000
+    ? `${(model.default_size_mb / 1000).toFixed(1)} GB`
+    : `${model.default_size_mb} MB`
+
+  return (
+    <Card className="group hover:border-zinc-300 hover:shadow-sm transition-all duration-200">
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-center">
+              <TaskIcon size={14} strokeWidth={1.5} className="text-zinc-500" />
+            </div>
+            <div>
+              <CardTitle className="text-[14px]">{model.name}</CardTitle>
+              <span className="text-[11px] font-medium text-zinc-400 uppercase tracking-wider">
+                {taskLabels[model.task] || model.task}
+              </span>
+            </div>
+          </div>
+          {model.downloaded && (
+            <Badge variant="success" className="gap-1">
+              <CheckCircle2 size={10} />
+              Ready
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-[13px] text-zinc-500 leading-relaxed line-clamp-2 mb-4">
+          {model.description}
+        </p>
+        <div className="flex items-center justify-between">
+          <span className="text-[12px] text-zinc-400">{sizeLabel}</span>
+          <Button variant="secondary" size="sm" onClick={() => onRun(model.name)}>
+            <Play size={12} />
+            Run
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
 function ModelsPage({ setPage, setRunModel }) {
   const [models, setModels] = useState([])
-  useEffect(() => { fetch(`${API}/models`).then(r => r.json()).then(setModels) }, [])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch(`${API}/models`).then(r => r.json()).then(data => { setModels(data); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (loading) return <LoadingState />
+
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Available Models</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {models.map(m => <ModelCard key={m.name} model={m} onRun={(name) => { setRunModel(name); setPage('run') }} />)}
-      </div>
+      <PageHeader
+        title="Models"
+        description={`${models.length} model${models.length !== 1 ? 's' : ''} available`}
+      />
+      {models.length === 0 ? (
+        <EmptyState
+          icon={Layers}
+          title="No models found"
+          description="Pull a model to get started."
+          action={
+            <code className="mt-3 text-[12px] bg-zinc-50 border border-zinc-200 px-3 py-1.5 rounded-lg text-zinc-600">
+              pixo pull yolov8
+            </code>
+          }
+        />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {models.map(m => (
+            <ModelCard key={m.name} model={m} onRun={(name) => { setRunModel(name); setPage('run') }} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
+
+// ─── Run Page ───────────────────────────────────────────────────────
 
 function RunPage({ initialModel }) {
   const [model, setModel] = useState(initialModel || 'yolov8')
   const [file, setFile] = useState(null)
   const [prompt, setPrompt] = useState('')
   const [running, setRunning] = useState(false)
+  const [progress, setProgress] = useState(null)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
   const [models, setModels] = useState([])
+  const [dragOver, setDragOver] = useState(false)
+  const fileInputRef = useRef(null)
 
   useEffect(() => { fetch(`${API}/models`).then(r => r.json()).then(setModels) }, [])
   useEffect(() => { if (initialModel) setModel(initialModel) }, [initialModel])
 
+  const handleDrop = useCallback((e) => {
+    e.preventDefault()
+    setDragOver(false)
+    const dropped = e.dataTransfer.files[0]
+    if (dropped) setFile(dropped)
+  }, [])
+
   const handleRun = async () => {
-    if (!file) return setError('Please select a file')
-    setRunning(true); setResult(null); setError(null)
+    if (!file) return setError('Select a file first')
+    setRunning(true); setResult(null); setError(null); setProgress(null)
 
     try {
-      // Upload file
       const formData = new FormData()
       formData.append('file', file)
       const uploadRes = await fetch(`${API}/upload`, { method: 'POST', body: formData })
+      if (!uploadRes.ok) throw new Error('Upload failed')
       const uploadData = await uploadRes.json()
 
-      // Start run
       const runRes = await fetch(`${API}/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, input_path: uploadData.path, prompt: prompt || undefined }),
       })
+      if (!runRes.ok) throw new Error('Failed to start job')
       const runData = await runRes.json()
 
-      // Poll for completion
       const jobId = runData.job_id
       const poll = setInterval(async () => {
-        const statusRes = await fetch(`${API}/jobs/${jobId}`)
-        const statusData = await statusRes.json()
-        if (statusData.status === 'complete') {
+        try {
+          const statusRes = await fetch(`${API}/jobs/${jobId}`)
+          const statusData = await statusRes.json()
+          if (statusData.progress) setProgress(statusData.progress)
+          if (statusData.status === 'complete') {
+            clearInterval(poll)
+            setResult(statusData.result || statusData)
+            setRunning(false)
+          } else if (statusData.status === 'error') {
+            clearInterval(poll)
+            setError(statusData.error || 'Job failed')
+            setRunning(false)
+          }
+        } catch {
           clearInterval(poll)
-          setResult(statusData.result || statusData)
-          setRunning(false)
-        } else if (statusData.status === 'error') {
-          clearInterval(poll)
-          setError(statusData.error || 'Job failed')
+          setError('Lost connection to server')
           setRunning(false)
         }
       }, 2000)
@@ -113,94 +281,257 @@ function RunPage({ initialModel }) {
     }
   }
 
-  const needsPrompt = ['grounding_dino'].includes(model)
+  const needsPrompt = ['grounding_dino', 'florence2'].includes(model)
+  const selectedModel = models.find(m => m.name === model)
 
   return (
-    <div className="max-w-xl mx-auto">
-      <h2 className="text-2xl font-bold mb-6">Run Model</h2>
-      <div className="bg-slate-800 rounded-lg p-6 border border-slate-700 space-y-4">
-        <div>
-          <label className="block text-sm text-slate-400 mb-1">Model</label>
-          <select value={model} onChange={e => setModel(e.target.value)}
-            className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white">
-            {models.map(m => <option key={m.name} value={m.name}>{m.name} - {m.task}</option>)}
-          </select>
-        </div>
+    <div className="max-w-2xl mx-auto">
+      <PageHeader title="Run" description="Select a model, upload a file, run inference." />
 
-        <div>
-          <label className="block text-sm text-slate-400 mb-1">Input File</label>
-          <input type="file" accept="image/*,video/*" onChange={e => setFile(e.target.files[0])}
-            className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white file:bg-cyan-600 file:text-white file:border-0 file:rounded file:px-3 file:py-1 file:mr-3" />
-        </div>
-
-        {needsPrompt && (
+      <Card>
+        <CardContent className="pt-5 space-y-5">
+          {/* Model selector */}
           <div>
-            <label className="block text-sm text-slate-400 mb-1">Text Prompt</label>
-            <input type="text" value={prompt} onChange={e => setPrompt(e.target.value)}
-              placeholder="person, car, dog" className="w-full bg-slate-700 border border-slate-600 rounded px-3 py-2 text-white" />
+            <Label>Model</Label>
+            <Select value={model} onChange={e => setModel(e.target.value)}>
+              {models.map(m => (
+                <option key={m.name} value={m.name}>
+                  {m.name} — {taskLabels[m.task] || m.task}
+                </option>
+              ))}
+            </Select>
+            {selectedModel && (
+              <p className="mt-1.5 text-[12px] text-zinc-400">
+                {taskLabels[selectedModel.task] || selectedModel.task} &middot; {selectedModel.default_size_mb} MB
+                {selectedModel.downloaded && <span className="ml-2 text-emerald-500">Ready</span>}
+              </p>
+            )}
           </div>
-        )}
 
-        <button onClick={handleRun} disabled={running}
-          className={`w-full py-2 rounded font-semibold ${running ? 'bg-slate-600 text-slate-400' : 'bg-cyan-600 hover:bg-cyan-500 text-white'}`}>
-          {running ? 'Running...' : 'Run'}
-        </button>
-
-        {error && <div className="bg-red-900/50 border border-red-700 rounded p-3 text-red-300 text-sm">{error}</div>}
-        {result && (
-          <div className="bg-green-900/30 border border-green-700 rounded p-4 space-y-2">
-            <p className="text-green-400 font-semibold">Done!</p>
-            {result.objects !== undefined && <p className="text-sm text-slate-300">Objects: {result.objects}</p>}
-            {result.classes && <p className="text-sm text-slate-300">Classes: {[...new Set(result.classes)].join(', ')}</p>}
-            {result.time_seconds && <p className="text-sm text-slate-300">Time: {result.time_seconds}s</p>}
-            {result.output_dir && <p className="text-xs text-slate-500">Output: {result.output_dir}</p>}
+          {/* File drop zone */}
+          <div>
+            <Label>Input</Label>
+            <div
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={cn(
+                "relative border border-dashed rounded-xl p-10 text-center cursor-pointer transition-all duration-200",
+                dragOver
+                  ? "border-zinc-400 bg-zinc-50"
+                  : file
+                    ? "border-zinc-300 bg-zinc-50/50"
+                    : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50/50"
+              )}>
+              <input ref={fileInputRef} type="file" accept="image/*,video/*"
+                onChange={e => setFile(e.target.files[0])} className="hidden" />
+              {file ? (
+                <div className="flex items-center justify-center gap-2.5">
+                  <FileImage size={18} strokeWidth={1.5} className="text-zinc-500" />
+                  <span className="text-[14px] text-zinc-700 font-medium">{file.name}</span>
+                  <Badge variant="outline">{(file.size / 1024 / 1024).toFixed(1)} MB</Badge>
+                </div>
+              ) : (
+                <>
+                  <div className="w-10 h-10 rounded-lg bg-zinc-100 border border-zinc-200 flex items-center justify-center mx-auto mb-3">
+                    <Upload size={20} strokeWidth={1.5} className="text-zinc-400" />
+                  </div>
+                  <p className="text-[13px] text-zinc-500">
+                    Drop your file here or <span className="text-zinc-900 font-medium">browse</span>
+                  </p>
+                  <p className="text-[11px] text-zinc-400 mt-1">Images and videos supported</p>
+                </>
+              )}
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Text prompt */}
+          {needsPrompt && (
+            <div>
+              <Label>Prompt</Label>
+              <Input
+                type="text" value={prompt} onChange={e => setPrompt(e.target.value)}
+                placeholder="e.g. person, car, dog"
+              />
+            </div>
+          )}
+
+          {/* Run button */}
+          <Button
+            onClick={handleRun}
+            disabled={running}
+            variant={running ? "secondary" : "default"}
+            className="w-full h-10"
+          >
+            {running ? (
+              <>
+                <Loader2 size={14} className="animate-spin" />
+                Running{progress ? ` (${progress}%)` : '...'}
+              </>
+            ) : (
+              <>
+                <Zap size={14} />
+                Run inference
+              </>
+            )}
+          </Button>
+
+          {/* Progress */}
+          {running && progress != null && (
+            <Progress value={progress} />
+          )}
+
+          {/* Error */}
+          {error && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4">
+              <XCircle size={16} className="text-red-500 mt-0.5 shrink-0" />
+              <p className="text-[13px] text-red-600">{error}</p>
+            </div>
+          )}
+
+          {/* Result */}
+          {result && (
+            <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-5 space-y-3">
+              <div className="flex items-center gap-2 mb-3">
+                <CheckCircle2 size={16} className="text-emerald-500" />
+                <span className="text-[14px] font-medium text-zinc-900">Complete</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {result.objects !== undefined && (
+                  <StatCard icon={BarChart3} label="Objects" value={result.objects} />
+                )}
+                {result.time_seconds && (
+                  <StatCard icon={Timer} label="Time" value={`${result.time_seconds}s`} />
+                )}
+              </div>
+
+              {result.classes && (
+                <div className="pt-2">
+                  <span className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-2">Classes</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {[...new Set(result.classes)].map(c => (
+                      <Badge key={c} variant="outline">{c}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {result.output_dir && (
+                <p className="text-[12px] text-zinc-400 pt-3 border-t border-zinc-200">
+                  Output: {result.output_dir}
+                </p>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
 
+function StatCard({ icon: Icon, label, value }) {
+  return (
+    <div className="bg-white rounded-lg p-3 border border-zinc-200">
+      <div className="flex items-center gap-1.5 mb-1">
+        <Icon size={12} strokeWidth={1.5} className="text-zinc-400" />
+        <span className="text-[11px] text-zinc-400 uppercase tracking-wider">{label}</span>
+      </div>
+      <span className="text-lg font-semibold text-zinc-900">{value}</span>
+    </div>
+  )
+}
+
+// ─── Jobs Page ──────────────────────────────────────────────────────
+
 function JobsPage() {
   const [jobs, setJobs] = useState([])
+  const [loading, setLoading] = useState(true)
+
   useEffect(() => {
-    const load = () => fetch(`${API}/jobs`).then(r => r.json()).then(setJobs)
+    const load = () => fetch(`${API}/jobs`).then(r => r.json()).then(data => { setJobs(data); setLoading(false) }).catch(() => setLoading(false))
     load()
     const interval = setInterval(load, 5000)
     return () => clearInterval(interval)
   }, [])
 
-  const statusColor = { complete: 'text-green-400', running: 'text-yellow-400', error: 'text-red-400', paused: 'text-orange-400' }
+  if (loading) return <LoadingState />
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Jobs</h2>
+      <PageHeader
+        title="Jobs"
+        description={
+          <span>
+            {jobs.length === 0 ? 'No jobs yet' : `${jobs.length} job${jobs.length !== 1 ? 's' : ''}`}
+            <span className="ml-2 text-zinc-300">&middot; auto-refreshes</span>
+          </span>
+        }
+      />
       {jobs.length === 0 ? (
-        <p className="text-slate-500">No jobs yet. Run a model to see results here.</p>
+        <EmptyState icon={Briefcase} title="No jobs yet" description="Run a model to see your jobs here." />
       ) : (
-        <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-          <table className="w-full text-sm text-left">
-            <thead className="bg-slate-700 text-slate-300">
-              <tr>
-                <th className="px-4 py-3">ID</th>
-                <th className="px-4 py-3">Model</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Progress</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Card className="overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Job</TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Progress</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {jobs.map((j, i) => (
-                <tr key={i} className="border-t border-slate-700">
-                  <td className="px-4 py-3 font-mono text-xs">{j.job_id}</td>
-                  <td className="px-4 py-3">{j.model}</td>
-                  <td className={`px-4 py-3 ${statusColor[j.status] || 'text-slate-400'}`}>{j.status}</td>
-                  <td className="px-4 py-3">{j.progress ? `${j.progress}%` : '-'}</td>
-                </tr>
+                <TableRow key={i}>
+                  <TableCell className="font-mono text-[12px] text-zinc-400">
+                    {j.job_id?.substring(0, 8) || '-'}
+                  </TableCell>
+                  <TableCell className="font-medium text-zinc-700">{j.model}</TableCell>
+                  <TableCell>
+                    <StatusIndicator status={j.status} />
+                  </TableCell>
+                  <TableCell className="w-44">
+                    {j.progress ? (
+                      <div className="flex items-center gap-2.5">
+                        <Progress value={j.progress} className="flex-1" />
+                        <span className="text-[12px] text-zinc-400 w-8 text-right tabular-nums">{j.progress}%</span>
+                      </div>
+                    ) : (
+                      <span className="text-zinc-400 text-[13px]">
+                        {j.status === 'complete' ? '100%' : '-'}
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </Card>
       )}
+    </div>
+  )
+}
+
+// ─── Hardware Page ──────────────────────────────────────────────────
+
+function HardwareMetric({ icon: Icon, label, value, usage }) {
+  return (
+    <div className="flex items-start gap-3 py-3.5">
+      <div className="w-8 h-8 rounded-lg bg-zinc-50 border border-zinc-200 flex items-center justify-center shrink-0">
+        <Icon size={14} strokeWidth={1.5} className="text-zinc-500" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline justify-between mb-0.5">
+          <span className="text-[13px] font-medium text-zinc-700">{label}</span>
+          {usage !== undefined && (
+            <span className="text-[11px] text-zinc-400 tabular-nums">{Math.round(usage)}%</span>
+          )}
+        </div>
+        <p className="text-[12px] text-zinc-500 truncate">{value}</p>
+        {usage !== undefined && <Progress value={usage} className="mt-2" />}
+      </div>
     </div>
   )
 }
@@ -208,68 +539,125 @@ function JobsPage() {
 function HardwarePage() {
   const [hw, setHw] = useState(null)
   const [cloud, setCloud] = useState(null)
+  const [loading, setLoading] = useState(true)
+
   useEffect(() => {
-    fetch(`${API}/hardware`).then(r => r.json()).then(setHw)
-    fetch(`${API}/cloud-status`).then(r => r.json()).then(setCloud)
+    Promise.all([
+      fetch(`${API}/hardware`).then(r => r.json()),
+      fetch(`${API}/cloud-status`).then(r => r.json()),
+    ]).then(([hwData, cloudData]) => {
+      setHw(hwData); setCloud(cloudData); setLoading(false)
+    }).catch(() => setLoading(false))
   }, [])
 
-  if (!hw) return <p className="text-slate-500">Loading...</p>
+  if (loading) return <LoadingState />
+  if (!hw) return <EmptyState icon={Cpu} title="Could not load hardware info" description="Make sure the pixo server is running." />
 
-  const items = [
-    ['CPU', `${hw.cpu_name} (${hw.cpu_cores} cores)`],
-    ['RAM', `${hw.ram_total_gb} GB total, ${hw.ram_available_gb} GB available`],
-    ['GPU', hw.has_gpu ? `${hw.gpu_name} (${hw.gpu_vram_gb} GB VRAM)` : 'Not detected'],
-    ['Disk', `${hw.disk_free_gb} GB free`],
-    ['OS', hw.os_name],
-  ]
+  const ramUsedPct = hw.ram_total_gb ? ((hw.ram_total_gb - hw.ram_available_gb) / hw.ram_total_gb * 100) : 0
 
   return (
     <div>
-      <h2 className="text-2xl font-bold mb-6">Hardware</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-slate-800 rounded-lg p-5 border border-slate-700">
-          <h3 className="text-lg font-semibold mb-4 text-cyan-400">System</h3>
-          {items.map(([k, v]) => (
-            <div key={k} className="flex justify-between py-2 border-b border-slate-700 last:border-0">
-              <span className="text-slate-400">{k}</span>
-              <span className="text-white text-sm">{v}</span>
-            </div>
-          ))}
-          <p className="text-xs text-slate-500 mt-3">{hw.recommendation}</p>
-        </div>
+      <PageHeader title="Hardware" description="System resources and cloud backend status." />
 
-        <div className="bg-slate-800 rounded-lg p-5 border border-slate-700">
-          <h3 className="text-lg font-semibold mb-4 text-cyan-400">Cloud Backends</h3>
-          {cloud && (
-            <>
-              <div className="flex justify-between py-2 border-b border-slate-700">
-                <span className="text-slate-400">Kaggle</span>
-                <span className={cloud.kaggle.configured ? 'text-green-400' : 'text-slate-500'}>
-                  {cloud.kaggle.configured ? `Connected (${cloud.kaggle.username})` : 'Not configured'}
-                </span>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-[11px] uppercase tracking-wider text-zinc-400 font-medium">System</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y divide-zinc-100">
+              <HardwareMetric icon={Cpu} label="CPU" value={`${hw.cpu_name} (${hw.cpu_cores} cores)`} />
+              <HardwareMetric icon={CircuitBoard} label="RAM"
+                value={`${hw.ram_available_gb} GB free of ${hw.ram_total_gb} GB`}
+                usage={ramUsedPct} />
+              <HardwareMetric icon={MonitorSmartphone} label="GPU"
+                value={hw.has_gpu ? `${hw.gpu_name} (${hw.gpu_vram_gb} GB VRAM)` : 'Not detected'} />
+              <HardwareMetric icon={HardDrive} label="Disk"
+                value={`${hw.disk_free_gb} GB free`} />
+            </div>
+            {hw.recommendation && (
+              <p className="text-[11px] text-zinc-400 mt-3 pt-3 border-t border-zinc-100 leading-relaxed">
+                {hw.recommendation}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-[11px] uppercase tracking-wider text-zinc-400 font-medium">Cloud Backends</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {cloud ? (
+              <div className="divide-y divide-zinc-100">
+                <CloudRow name="Kaggle" configured={cloud.kaggle?.configured} detail={cloud.kaggle?.username} />
+                <CloudRow name="Colab" configured={cloud.colab?.configured} detail={cloud.colab?.configured ? 'Connected' : null} />
               </div>
-              <div className="flex justify-between py-2">
-                <span className="text-slate-400">Colab</span>
-                <span className={cloud.colab.configured ? 'text-green-400' : 'text-slate-500'}>
-                  {cloud.colab.configured ? 'Connected' : 'Not configured'}
-                </span>
-              </div>
-            </>
-          )}
-        </div>
+            ) : (
+              <p className="text-[13px] text-zinc-400">Loading...</p>
+            )}
+            <p className="text-[11px] text-zinc-400 mt-4 pt-3 border-t border-zinc-100 leading-relaxed">
+              Run <code className="text-[11px] bg-zinc-50 border border-zinc-200 px-1.5 py-0.5 rounded text-zinc-600">pixo setup-cloud</code> to connect backends.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
 }
+
+function CloudRow({ name, configured, detail }) {
+  return (
+    <div className="flex items-center justify-between py-3.5">
+      <div className="flex items-center gap-2.5">
+        <Cloud size={14} strokeWidth={1.5} className="text-zinc-400" />
+        <span className="text-[13px] text-zinc-700">{name}</span>
+      </div>
+      {configured ? (
+        <Badge variant="success" className="gap-1">
+          <CheckCircle2 size={10} />
+          {detail || 'Connected'}
+        </Badge>
+      ) : (
+        <span className="text-[12px] text-zinc-400">Not configured</span>
+      )}
+    </div>
+  )
+}
+
+// ─── Shared ─────────────────────────────────────────────────────────
+
+function PageHeader({ title, description }) {
+  return (
+    <div className="mb-8">
+      <h2 className="text-xl font-semibold text-zinc-900 mb-1">{title}</h2>
+      <div className="text-[13px] text-zinc-400">{description}</div>
+    </div>
+  )
+}
+
+function Label({ children }) {
+  return <label className="block text-[13px] font-medium text-zinc-600 mb-2">{children}</label>
+}
+
+function LoadingState() {
+  return (
+    <div className="flex items-center justify-center py-24">
+      <Loader2 size={20} strokeWidth={1.5} className="animate-spin text-zinc-300" />
+    </div>
+  )
+}
+
+// ─── App ────────────────────────────────────────────────────────────
 
 function App() {
   const [page, setPage] = useState('models')
   const [runModel, setRunModel] = useState(null)
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-white">
       <Nav page={page} setPage={setPage} />
-      <main className="max-w-6xl mx-auto px-6 py-8">
+      <main className="px-8 py-8">
         {page === 'models' && <ModelsPage setPage={setPage} setRunModel={setRunModel} />}
         {page === 'run' && <RunPage initialModel={runModel} />}
         {page === 'jobs' && <JobsPage />}
