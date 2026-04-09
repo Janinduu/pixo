@@ -923,6 +923,32 @@ def guide():
 
 
 @app.command()
+def ui(
+    port: int = typer.Option(8420, "--port", "-p", help="Port to run the server on"),
+    no_browser: bool = typer.Option(False, "--no-browser", help="Don't open browser automatically"),
+):
+    """Start the web dashboard (requires: pip install pixo[web])."""
+    try:
+        import uvicorn
+    except ImportError:
+        console.print("[red]Web dashboard requires extra dependencies.[/red]")
+        console.print("Install with: [cyan]pip install pixo[web][/cyan]")
+        raise typer.Exit(1)
+
+    console.print(f"[bold]Starting pixo dashboard...[/bold]")
+    console.print(f"[cyan]http://localhost:{port}[/cyan]")
+    console.print(f"[cyan]API docs: http://localhost:{port}/docs[/cyan]")
+    console.print("[dim]Press Ctrl+C to stop[/dim]\n")
+
+    if not no_browser:
+        import webbrowser
+        import threading
+        threading.Timer(1.5, lambda: webbrowser.open(f"http://localhost:{port}")).start()
+
+    uvicorn.run("pixo.server.app:app", host="0.0.0.0", port=port, reload=False)
+
+
+@app.command()
 def rm(
     model_name: str = typer.Argument(help="Model to remove (e.g. yolov8, sam2:small)"),
 ):
