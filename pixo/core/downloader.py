@@ -41,11 +41,13 @@ def download_model(model: ModelCard, variant_name: str | None = None) -> Path:
         console.print(f"[green]Already downloaded:[/green] {dest_path}")
         return dest_path
 
+    # Use per-variant repo if specified, otherwise fall back to model-level repo
+    repo = variant.repo or model.huggingface_repo
     label = f"{model.name}:{variant_name}" if variant_name and variant_name != "default" else model.name
-    console.print(f"[bold]Pulling {label}[/bold] ({variant.size_mb} MB) from {model.huggingface_repo}")
+    console.print(f"[bold]Pulling {label}[/bold] ({variant.size_mb} MB) from {repo}")
 
     downloaded_path = hf_hub_download(
-        repo_id=model.huggingface_repo,
+        repo_id=repo,
         filename=variant.filename,
         local_dir=str(model_dir),
     )

@@ -40,6 +40,9 @@ def _get_frame_count(input_path: Path) -> int:
 MODEL_SPEED = {
     # model_name: (cpu_secs_per_frame, gpu_secs_per_frame, cpu_secs_per_image, gpu_secs_per_image)
     "yolov8":            (0.35, 0.02,   7,    3),
+    "yolov11":           (0.30, 0.02,   6,    3),  # slightly faster than v8
+    "yolov12":           (0.30, 0.02,   6,    3),  # similar to v11
+    "rtdetr":            (0.50, 0.03,  10,    4),  # transformer, slightly slower
     "grounding_dino":    (45,   2,     45,    5),
     "depth_anything_v2": (3,    0.1,    3,    2),
     "sam2":              (2640, 30,   2640,   60),  # 44 min on CPU for one image

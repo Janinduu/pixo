@@ -1,20 +1,20 @@
 name: samurai
-description: "SAMURAI -- segment and track anything in video"
+description: "Video object tracking built on SAM2. Track any object across video frames automatically."
 version: "1.0"
 task: video-tracking-segmentation
-author: yangchris11
+author: University of Washington
 
 source:
   type: huggingface
   repo: facebook/sam2.1-hiera-large
 
 dependencies:
-  python: ">=3.9,<3.12"
+  python: ">=3.9"
   packages:
-    - sam2
-    - numpy>=1.24
-    - opencv-python>=4.8.0
     - torch>=2.0
+    - transformers>=4.40
+    - opencv-python>=4.8.0
+    - numpy>=1.24
 
 hardware:
   min_ram_gb: 8
@@ -41,14 +41,17 @@ variants:
   default:
     filename: model.safetensors
     size_mb: 898
-    description: "Large -- best quality, uses SAM2.1 hiera-large"
+    repo: facebook/sam2.1-hiera-large
+    description: "Large -- best tracking quality"
   lite:
     filename: model.safetensors
     size_mb: 324
+    repo: facebook/sam2.1-hiera-base-plus
     description: "Base plus -- good balance of speed and quality"
   tiny:
     filename: model.safetensors
     size_mb: 156
+    repo: facebook/sam2.1-hiera-tiny
     description: "Tiny -- fastest, lower accuracy"
 
 checkpoint:

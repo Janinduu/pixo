@@ -1,8 +1,8 @@
 name: depth_anything_v2
-description: "Depth Anything V2 -- monocular depth estimation"
+description: "Monocular depth estimation. Generates depth maps from single images -- no stereo camera needed."
 version: "2.0"
 task: depth-estimation
-author: LiheYoung
+author: TikTok / ByteDance
 
 source:
   type: huggingface
@@ -41,14 +41,17 @@ variants:
   default:
     filename: model.safetensors
     size_mb: 99
+    repo: depth-anything/Depth-Anything-V2-Small-hf
     description: "Small -- fast, good quality"
   base:
     filename: model.safetensors
     size_mb: 390
+    repo: depth-anything/Depth-Anything-V2-Base-hf
     description: "Base -- better quality"
   large:
     filename: model.safetensors
     size_mb: 1340
+    repo: depth-anything/Depth-Anything-V2-Large-hf
     description: "Large -- best quality"
 
 checkpoint:

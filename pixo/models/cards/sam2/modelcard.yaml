@@ -1,5 +1,5 @@
 name: sam2
-description: "SAM 2.1 -- Segment Anything Model 2 by Meta"
+description: "Segment Anything Model 2. Click or prompt to segment any object with pixel-perfect masks."
 version: "2.1"
 task: segmentation
 author: meta
@@ -39,18 +39,22 @@ variants:
   default:
     filename: model.safetensors
     size_mb: 898
+    repo: facebook/sam2.1-hiera-large
     description: "Large -- best quality segmentation"
   base_plus:
     filename: model.safetensors
     size_mb: 324
+    repo: facebook/sam2.1-hiera-base-plus
     description: "Base+ -- good quality, lighter"
   small:
     filename: model.safetensors
     size_mb: 185
+    repo: facebook/sam2.1-hiera-small
     description: "Small -- fast, still good"
   tiny:
     filename: model.safetensors
     size_mb: 156
+    repo: facebook/sam2.1-hiera-tiny
     description: "Tiny -- smallest, runs anywhere"
 
 checkpoint:

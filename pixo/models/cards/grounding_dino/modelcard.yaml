@@ -1,8 +1,8 @@
 name: grounding_dino
-description: "Grounding DINO -- open-set object detection with text prompts"
+description: "Text-prompted object detection. Describe what to find in natural language -- it locates it."
 version: "1.0"
 task: detection
-author: IDEA-Research
+author: IDEA Research
 
 source:
   type: huggingface
@@ -38,10 +38,12 @@ variants:
   default:
     filename: model.safetensors
     size_mb: 341
+    repo: IDEA-Research/grounding-dino-tiny
     description: "Tiny -- fast, good accuracy for most tasks"
   base:
     filename: model.safetensors
     size_mb: 936
+    repo: IDEA-Research/grounding-dino-base
     description: "Base -- SwinT backbone, best accuracy"
 
 checkpoint:

@@ -48,9 +48,9 @@ function Nav({ page, setPage }) {
   ]
   return (
     <nav className="sticky top-0 z-50 border-b border-zinc-200 bg-white/80 backdrop-blur-xl">
-      <div className="px-8 h-14 flex items-center gap-1">
+      <div className="px-8 h-14 flex items-center justify-between">
         <button onClick={() => setPage('models')}
-          className="flex items-center gap-3 mr-8 hover:opacity-80 transition-opacity cursor-pointer">
+          className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer">
           <PixoLogo size={36} />
           <div className="flex flex-col items-start">
             <span className="text-lg font-bold leading-none" style={{ color: '#1a1a2e', letterSpacing: '-0.5px' }}>pixo</span>
@@ -542,12 +542,16 @@ function HardwarePage() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([
-      fetch(`${API}/hardware`).then(r => r.json()),
-      fetch(`${API}/cloud-status`).then(r => r.json()),
-    ]).then(([hwData, cloudData]) => {
-      setHw(hwData); setCloud(cloudData); setLoading(false)
-    }).catch(() => setLoading(false))
+    const load = () =>
+      Promise.all([
+        fetch(`${API}/hardware`).then(r => r.json()),
+        fetch(`${API}/cloud-status`).then(r => r.json()),
+      ]).then(([hwData, cloudData]) => {
+        setHw(hwData); setCloud(cloudData); setLoading(false)
+      }).catch(() => setLoading(false))
+    load()
+    const interval = setInterval(load, 5000)
+    return () => clearInterval(interval)
   }, [])
 
   if (loading) return <LoadingState />

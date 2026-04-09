@@ -27,6 +27,7 @@ TEMPLATES = {
     "detect_and_segment": ["grounding_dino", "sam2"],
     "detect_and_track": ["grounding_dino", "sam2", "samurai"],
     "segment_and_depth": ["sam2", "depth_anything_v2"],
+    "grounding_sam": ["grounding_dino", "sam2"],  # GroundingSAM = detect by text + segment
 }
 
 

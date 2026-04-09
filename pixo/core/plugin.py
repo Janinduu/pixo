@@ -36,6 +36,7 @@ class ModelVariant:
     filename: str
     size_mb: int
     description: str = ""
+    repo: str = ""  # Per-variant HuggingFace repo (overrides model-level source.repo)
 
 
 @dataclass
@@ -116,6 +117,7 @@ def _parse_card(data: dict) -> ModelCard:
             filename=vdata.get("filename", ""),
             size_mb=vdata.get("size_mb", 0),
             description=vdata.get("description", ""),
+            repo=vdata.get("repo", ""),
         )
 
     ckpt_data = data.get("checkpoint", {})

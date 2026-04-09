@@ -1,0 +1,50 @@
+name: rtdetr
+description: "Real-Time Detection Transformer. End-to-end transformer detector -- no NMS needed, very accurate."
+version: "2.0"
+task: detection
+author: Baidu / Ultralytics
+
+source:
+  type: huggingface
+  repo: Ultralytics/RT-DETR
+
+dependencies:
+  python: ">=3.9"
+  packages:
+    - ultralytics>=8.1.0
+    - opencv-python>=4.8.0
+
+hardware:
+  min_ram_gb: 4
+  recommended_ram_gb: 8
+  min_vram_gb: 0
+  recommended_vram_gb: 4
+  cpu_fallback: true
+
+inputs:
+  - type: image
+    formats: [jpg, png, bmp, webp]
+  - type: video
+    formats: [mp4, avi, mov, mkv, webm]
+
+outputs:
+  - type: boxes
+    format: json
+  - type: labels
+    format: json
+  - type: annotated
+    format: image/video
+
+variants:
+  default:
+    filename: rtdetr-l.pt
+    size_mb: 64
+    description: "Large -- good accuracy, transformer-based"
+  xlarge:
+    filename: rtdetr-x.pt
+    size_mb: 129
+    description: "Extra large -- best accuracy"
+
+checkpoint:
+  supported: true
+  every: 500

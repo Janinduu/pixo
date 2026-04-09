@@ -1,8 +1,8 @@
 name: florence2
-description: "Florence-2 -- vision-language model for captioning, detection, and more"
+description: "Versatile vision-language model. Captioning, OCR, object detection, and more -- all in one model."
 version: "2.0"
 task: vision-language
-author: microsoft
+author: Microsoft
 
 source:
   type: huggingface
@@ -12,7 +12,7 @@ dependencies:
   python: ">=3.9"
   packages:
     - torch>=2.0
-    - transformers>=4.30
+    - "transformers<5.0"
     - timm
     - einops
 
@@ -39,10 +39,12 @@ variants:
   default:
     filename: model.safetensors
     size_mb: 460
+    repo: microsoft/Florence-2-base
     description: "Base -- good balance"
   large:
     filename: model.safetensors
     size_mb: 1520
+    repo: microsoft/Florence-2-large
     description: "Large -- best quality"
 
 checkpoint:
