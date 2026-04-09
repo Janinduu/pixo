@@ -38,7 +38,7 @@ outputs:
 variants:
   default:
     filename: yolo11n.pt
-    size_mb: 6
+    size_mb: 5
     description: "Nano -- fastest, good for quick tests"
   small:
     filename: yolo11s.pt

@@ -7,15 +7,16 @@ from pathlib import Path
 
 
 def setup(model_dir: str, variant: str, device: str):
-    """Load the RT-DETR model."""
+    """Load the RT-DETR model. Ultralytics auto-downloads if not found."""
     from ultralytics import RTDETR
 
     model_path = Path(model_dir) / variant
     onnx_path = model_path.with_suffix(".onnx")
     if onnx_path.exists():
-        model_path = onnx_path
-
-    return RTDETR(str(model_path))
+        return RTDETR(str(onnx_path))
+    if model_path.exists():
+        return RTDETR(str(model_path))
+    return RTDETR(variant)
 
 
 def run(model, input_path: str, output_dir: str, options: dict):

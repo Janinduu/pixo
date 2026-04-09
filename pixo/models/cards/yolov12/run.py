@@ -7,15 +7,17 @@ from pathlib import Path
 
 
 def setup(model_dir: str, variant: str, device: str):
-    """Load the YOLO12 model."""
+    """Load the YOLO12 model. Ultralytics auto-downloads if not found."""
     from ultralytics import YOLO
 
     model_path = Path(model_dir) / variant
     onnx_path = model_path.with_suffix(".onnx")
     if onnx_path.exists():
-        model_path = onnx_path
-
-    return YOLO(str(model_path), task="detect")
+        return YOLO(str(onnx_path), task="detect")
+    if model_path.exists():
+        return YOLO(str(model_path), task="detect")
+    # Let Ultralytics download the model directly
+    return YOLO(variant, task="detect")
 
 
 def run(model, input_path: str, output_dir: str, options: dict):

@@ -37,23 +37,23 @@ outputs:
 
 variants:
   default:
-    filename: yolov12n.pt
+    filename: yolo12n.pt
     size_mb: 7
     description: "Nano -- fastest"
   small:
-    filename: yolov12s.pt
+    filename: yolo12s.pt
     size_mb: 22
     description: "Small -- good balance"
   medium:
-    filename: yolov12m.pt
+    filename: yolo12m.pt
     size_mb: 42
     description: "Medium -- more accurate"
   large:
-    filename: yolov12l.pt
+    filename: yolo12l.pt
     size_mb: 54
     description: "Large -- high accuracy"
   xlarge:
-    filename: yolov12x.pt
+    filename: yolo12x.pt
     size_mb: 109
     description: "Extra large -- best accuracy"
 

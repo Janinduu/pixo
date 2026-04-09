@@ -46,14 +46,21 @@ def download_model(model: ModelCard, variant_name: str | None = None) -> Path:
     label = f"{model.name}:{variant_name}" if variant_name and variant_name != "default" else model.name
     console.print(f"[bold]Pulling {label}[/bold] ({variant.size_mb} MB) from {repo}")
 
-    downloaded_path = hf_hub_download(
-        repo_id=repo,
-        filename=variant.filename,
-        local_dir=str(model_dir),
-    )
-
-    console.print(f"[green]Done![/green] Saved to {dest_path}")
-    return Path(downloaded_path)
+    try:
+        downloaded_path = hf_hub_download(
+            repo_id=repo,
+            filename=variant.filename,
+            local_dir=str(model_dir),
+        )
+        console.print(f"[green]Done![/green] Saved to {dest_path}")
+        return Path(downloaded_path)
+    except Exception as e:
+        # For Ultralytics models (YOLO, RT-DETR), the runner handles downloading
+        # Create a marker so pixo knows the model dir exists
+        if variant.filename.endswith(".pt"):
+            console.print(f"[dim]Will download via Ultralytics on first run.[/dim]")
+            return dest_path
+        raise
 
 
 def remove_model(model_name: str, variant_name: str | None = None) -> bool:
