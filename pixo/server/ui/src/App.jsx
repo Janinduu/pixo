@@ -131,12 +131,10 @@ function FamilyCard({ family, onRun }) {
   const TaskIcon = taskIcons[family.task] || Box
   const hasMultipleVersions = family.versions.length > 1
   const [selectedVersion, setSelectedVersion] = useState(0)
+  const [selectedVariant, setSelectedVariant] = useState('default')
   const currentModel = family.versions[selectedVersion]
-  const hasMultipleVariants = currentModel?.variants?.length > 1
-
-  const sizeLabel = currentModel?.default_size_mb >= 1000
-    ? `${(currentModel.default_size_mb / 1000).toFixed(1)} GB`
-    : `${currentModel?.default_size_mb || 0} MB`
+  const allVariants = ['default', ...(currentModel?.variants || [])]
+  const anyDownloaded = family.versions.some(v => v.downloaded)
 
   return (
     <Card className="group hover:border-zinc-300 hover:shadow-sm transition-all duration-200">
@@ -153,7 +151,7 @@ function FamilyCard({ family, onRun }) {
               </span>
             </div>
           </div>
-          {currentModel?.downloaded && (
+          {anyDownloaded && (
             <Badge variant="success" className="gap-1">
               <CheckCircle2 size={10} />
               Ready
@@ -172,9 +170,9 @@ function FamilyCard({ family, onRun }) {
             <span className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1.5">Version</span>
             <div className="flex gap-1">
               {family.versions.map((v, i) => (
-                <button key={v.name} onClick={() => setSelectedVersion(i)}
+                <button key={v.name} onClick={() => { setSelectedVersion(i); setSelectedVariant('default') }}
                   className={cn(
-                    "px-2.5 py-1 rounded text-[12px] font-medium transition-all",
+                    "px-2.5 py-1 rounded text-[12px] font-medium transition-all cursor-pointer",
                     selectedVersion === i
                       ? "bg-zinc-900 text-white"
                       : "bg-zinc-100 text-zinc-500 hover:bg-zinc-200"
@@ -186,23 +184,33 @@ function FamilyCard({ family, onRun }) {
           </div>
         )}
 
-        {/* Variant chips */}
-        {hasMultipleVariants && (
+        {/* Variant selector */}
+        {allVariants.length > 1 && (
           <div className="mb-3">
-            <span className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1.5">Variants</span>
+            <span className="text-[11px] text-zinc-400 uppercase tracking-wider block mb-1.5">Variant</span>
             <div className="flex flex-wrap gap-1">
-              {currentModel.variants.map(v => (
-                <span key={v} className="px-2 py-0.5 rounded bg-zinc-50 border border-zinc-200 text-[11px] text-zinc-500">
+              {allVariants.map(v => (
+                <button key={v} onClick={() => setSelectedVariant(v)}
+                  className={cn(
+                    "px-2 py-0.5 rounded text-[11px] font-medium transition-all cursor-pointer",
+                    selectedVariant === v
+                      ? "bg-zinc-800 text-white"
+                      : "bg-zinc-50 border border-zinc-200 text-zinc-500 hover:bg-zinc-100"
+                  )}>
                   {v}
-                </span>
+                </button>
               ))}
             </div>
           </div>
         )}
 
-        <div className="flex items-center justify-between mt-2">
-          <span className="text-[12px] text-zinc-400">{sizeLabel}</span>
-          <Button variant="secondary" size="sm" onClick={() => onRun(currentModel.name)}>
+        <div className="flex items-center justify-end mt-2">
+          <Button variant="secondary" size="sm" onClick={() => {
+            const modelWithVariant = selectedVariant !== 'default'
+              ? `${currentModel.name}:${selectedVariant}`
+              : currentModel.name
+            onRun(modelWithVariant)
+          }}>
             <Play size={12} />
             Run
           </Button>
@@ -697,8 +705,25 @@ function LoadingState() {
 // ─── App ────────────────────────────────────────────────────────────
 
 function App() {
-  const [page, setPage] = useState('models')
+  const getPageFromHash = () => {
+    const hash = window.location.hash.replace('#', '') || 'models'
+    return hash
+  }
+
+  const [page, setPageState] = useState(getPageFromHash)
   const [runModel, setRunModel] = useState(null)
+
+  const setPage = useCallback((newPage) => {
+    window.location.hash = newPage
+    setPageState(newPage)
+  }, [])
+
+  // Listen for browser back/forward
+  useEffect(() => {
+    const handleHashChange = () => setPageState(getPageFromHash())
+    window.addEventListener('hashchange', handleHashChange)
+    return () => window.removeEventListener('hashchange', handleHashChange)
+  }, [])
 
   return (
     <div className="min-h-screen bg-white">
