@@ -82,6 +82,7 @@ def run(
     isolate: bool = typer.Option(False, "--isolate", help="Run in model's isolated venv (must pixo pull --isolate first)"),
     prompt: str = typer.Option(None, "--prompt", "-p", help="Text prompt for detection models (e.g. 'person, car')"),
     task: str = typer.Option(None, "--task", help="Task for multi-task models like Florence-2 (caption, detect, ocr)"),
+    airgap: bool = typer.Option(False, "--airgap", help="Block all outbound network calls during the run"),
 ):
     """Run inference on an image or video."""
     from pixo.core.optimizer import get_optimized_path, is_optimized
@@ -89,10 +90,16 @@ def run(
     from pixo.core.runner import get_device
     from pixo.cloud.config import load_config as load_cloud_config
     from pixo.cloud.router import pick_backend
+    from pixo.core.airgap import airgap_enforced, AirgapViolation
 
     input_path = Path(input)
     if not input_path.exists():
         console.print(f"[red]File not found: {input}[/red]")
+        raise typer.Exit(1)
+
+    # Airgap is incompatible with cloud backends
+    if airgap and backend in ("kaggle", "colab"):
+        console.print("[red]--airgap cannot be combined with cloud backends[/red]")
         raise typer.Exit(1)
 
     name, variant_name = _parse_model_name(model_name)
@@ -207,39 +214,51 @@ def run(
 
     console.print(f"[bold]Device:[/bold] {resolved_device}")
     console.print(f"[bold]Input:[/bold] {input_path}")
+    if airgap:
+        console.print("[bold magenta]Airgap:[/bold magenta] network access blocked for this run")
+
+    def _do_run():
+        loaded_model = runner_mod.setup(model_dir, variant.filename, resolved_device)
+
+        # Create or reuse job state
+        job = existing if existing else ckpt_mgr.create_job(
+            model=name, variant=variant.filename, input_path=str(input_path),
+            output_dir=str(Path(output)), device=resolved_device,
+        )
+        job.status = "running"
+
+        # Get checkpoint interval from model card
+        ckpt_every = card.checkpoint.every if card.checkpoint.supported else 500
+
+        _run_with_checkpoints(
+            runner_mod=runner_mod,
+            loaded_model=loaded_model,
+            name=name,
+            input_path=input_path,
+            output=output,
+            resolved_device=resolved_device,
+            limiter=limiter,
+            low_memory=low_memory,
+            job=job,
+            ckpt_mgr=ckpt_mgr,
+            ckpt_every=ckpt_every,
+            resume_from=resume_from,
+            prompt=prompt,
+            task=task,
+        )
 
     try:
-        loaded_model = runner_mod.setup(model_dir, variant.filename, resolved_device)
+        if airgap:
+            with airgap_enforced():
+                _do_run()
+        else:
+            _do_run()
+    except AirgapViolation as e:
+        console.print(f"\n[red]{e}[/red]")
+        raise typer.Exit(1)
     except (NotImplementedError, RuntimeError) as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1)
-
-    # Create or reuse job state
-    job = existing if existing else ckpt_mgr.create_job(
-        model=name, variant=variant.filename, input_path=str(input_path),
-        output_dir=str(Path(output)), device=resolved_device,
-    )
-    job.status = "running"
-
-    # Get checkpoint interval from model card
-    ckpt_every = card.checkpoint.every if card.checkpoint.supported else 500
-
-    _run_with_checkpoints(
-        runner_mod=runner_mod,
-        loaded_model=loaded_model,
-        name=name,
-        input_path=input_path,
-        output=output,
-        resolved_device=resolved_device,
-        limiter=limiter,
-        low_memory=low_memory,
-        job=job,
-        ckpt_mgr=ckpt_mgr,
-        ckpt_every=ckpt_every,
-        resume_from=resume_from,
-        prompt=prompt,
-        task=task,
-    )
 
 
 def _run_with_checkpoints(runner_mod, loaded_model, name, input_path, output,
@@ -416,6 +435,14 @@ def _run_with_checkpoints(runner_mod, loaded_model, name, input_path, output,
     console.print(f"[bold]Output:[/bold] {out_fmt.root}")
 
 
+_PRIVACY_COLORS = {"green": "green", "yellow": "yellow", "red": "red"}
+
+
+def _privacy_badge(level: str) -> str:
+    color = _PRIVACY_COLORS.get(level, "dim")
+    return f"[{color}]{level}[/{color}]"
+
+
 @app.command(name="list")
 def list_cmd():
     """List available models."""
@@ -426,6 +453,7 @@ def list_cmd():
     table.add_column("Task", style="green")
     table.add_column("Variants", style="yellow")
     table.add_column("Default Size", justify="right")
+    table.add_column("Privacy", justify="center")
     table.add_column("Description")
 
     for card in cards:
@@ -439,12 +467,19 @@ def list_cmd():
             card.task,
             variant_names or "--",
             size,
+            _privacy_badge(card.privacy.level),
             card.description,
         )
 
     console.print(table)
     console.print(
-        "\n[dim]Pull a model:[/dim] pixo pull <name>    "
+        "\n[dim]Privacy:[/dim] "
+        "[green]green[/green] = offline after pull   "
+        "[yellow]yellow[/yellow] = needs first-pull internet   "
+        "[red]red[/red] = needs runtime internet"
+    )
+    console.print(
+        "[dim]Pull a model:[/dim] pixo pull <name>    "
         "[dim]Variant:[/dim] pixo pull <name>:<variant>"
     )
 
@@ -460,6 +495,10 @@ def info(
     has_runner = loader.has_runner(name)
     runner_status = "[green]ready[/green]" if has_runner else "[dim]stub[/dim]"
 
+    privacy_line = _privacy_badge(card.privacy.level)
+    if card.privacy.note:
+        privacy_line += f" [dim]— {card.privacy.note}[/dim]"
+
     console.print(Panel(
         f"[bold]{card.name}[/bold] -- {card.description}\n\n"
         f"[bold]Task:[/bold] {card.task}\n"
@@ -467,6 +506,7 @@ def info(
         f"[bold]Inputs:[/bold] {', '.join(card.input_types)}\n"
         f"[bold]Outputs:[/bold] {', '.join(card.output_types)}\n"
         f"[bold]Source:[/bold] {card.huggingface_repo}\n"
+        f"[bold]Privacy:[/bold] {privacy_line}\n"
         f"[bold]Runner:[/bold] {runner_status}",
         title=card.name,
     ))
@@ -994,6 +1034,335 @@ def pipe(
     run_pipeline(models, input_path, Path(output), options, device=device or "cpu")
 
     console.print(f"\n[bold green]Pipeline complete![/bold green] Results in: {output}")
+
+
+@app.command()
+def serve(
+    model_name: str = typer.Argument(help="Model to serve (e.g. yolov8, grounding_dino)"),
+    port: int = typer.Option(7860, "--port", "-p", help="Port to run the UI on"),
+    share: bool = typer.Option(False, "--share", help="Create a public Gradio share link (requires internet)"),
+):
+    """Launch a browser UI for one model — drag-drop an image and see results instantly."""
+    try:
+        import gradio as gr  # type: ignore
+    except ImportError:
+        console.print("[red]Gradio not installed.[/red]")
+        console.print("Install with: [cyan]pip install pixo[demo][/cyan]")
+        raise typer.Exit(1)
+
+    name, variant_name = _parse_model_name(model_name)
+    card = _get_card(name)
+    variant = card.get_variant(variant_name)
+    model_path = get_model_path(card.name, variant, variant_name)
+
+    if not model_path.exists():
+        console.print(f"[yellow]Pulling {model_name}...[/yellow]")
+        download_model(card, variant_name)
+
+    from pixo.core.runner import get_device
+    resolved_device = get_device(None)
+
+    try:
+        runner_mod = loader.load_runner(name)
+    except (FileNotFoundError, ValueError) as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    console.print(f"[dim]Loading {model_name} on {resolved_device}...[/dim]")
+    loaded_model = runner_mod.setup(str(model_path.parent), variant.filename, resolved_device)
+
+    import tempfile
+
+    def _infer(image, prompt_text: str | None, task_choice: str | None):
+        """Gradio callback. Runs the model on the uploaded image."""
+        if image is None:
+            return None, "Please upload an image."
+
+        # Save the uploaded image to a temp file (gradio gives us a path or PIL)
+        if isinstance(image, str):
+            input_path = Path(image)
+        else:
+            tmp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+            image.save(tmp.name)
+            input_path = Path(tmp.name)
+
+        out_dir = Path(tempfile.mkdtemp(prefix="pixo_serve_"))
+        options = {"device": resolved_device}
+        if prompt_text:
+            options["prompt"] = prompt_text
+        if task_choice and task_choice != "(none)":
+            options["task"] = task_choice
+
+        summary: dict = {}
+        for update in runner_mod.run(loaded_model, str(input_path), str(out_dir), options):
+            summary = update
+
+        # Find the visualization
+        images = sorted([p for p in out_dir.rglob("*") if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp")])
+        viz = str(images[-1]) if images else None
+
+        summary_text = "\n".join(f"{k}: {v}" for k, v in summary.items() if k not in ("frame", "total"))
+        return viz, summary_text or "Done."
+
+    needs_prompt = name in ("grounding_dino",)
+    needs_task = name in ("florence2",)
+
+    with gr.Blocks(title=f"pixo — {model_name}") as demo:
+        gr.Markdown(f"## pixo — `{model_name}`\n{card.description}")
+        with gr.Row():
+            with gr.Column():
+                inp = gr.Image(type="pil", label="Input image")
+                prompt_in = gr.Textbox(
+                    label="Prompt (required)" if needs_prompt else "Prompt (optional)",
+                    placeholder="person, car, dog" if needs_prompt else "",
+                    visible=needs_prompt,
+                )
+                task_in = gr.Dropdown(
+                    choices=["(none)", "caption", "detailed_caption", "detect", "ocr"],
+                    value="(none)",
+                    label="Task",
+                    visible=needs_task,
+                )
+                btn = gr.Button("Run", variant="primary")
+            with gr.Column():
+                out_img = gr.Image(label="Result")
+                out_text = gr.Textbox(label="Summary", lines=6)
+        btn.click(_infer, inputs=[inp, prompt_in, task_in], outputs=[out_img, out_text])
+
+    console.print(f"[bold]UI:[/bold] http://localhost:{port}")
+    demo.launch(server_port=port, share=share, inbrowser=True)
+
+
+@app.command()
+def compare(
+    models: list[str] = typer.Argument(help="Two or more detection models (e.g. yolov8 yolov11 yolov12)"),
+    input: str = typer.Option(..., "--input", "-i", help="Input image"),
+    output: str = typer.Option("./pixo_output", "--output", "-o", help="Where to save the report"),
+    conf: float = typer.Option(0.25, "--conf", help="Confidence threshold"),
+    iou_threshold: float = typer.Option(0.5, "--iou", help="IoU threshold for matching boxes across models"),
+    device: str = typer.Option(None, "--device", "-d", help="Force device: cpu or cuda"),
+    open_browser: bool = typer.Option(True, "--open/--no-open", help="Open the report in your browser"),
+):
+    """Run multiple detection models on one image and see only where they disagree."""
+    from pixo.core.compare import (
+        detect_with_model, group_detections, classify_groups,
+        build_compare_html, SUPPORTED_MODELS,
+    )
+    from pixo.core.runner import get_device
+
+    if len(models) < 2:
+        console.print("[red]Need at least two models to compare. Example: pixo compare yolov8 yolov11 --input photo.jpg[/red]")
+        raise typer.Exit(1)
+
+    input_path = Path(input)
+    if not input_path.exists():
+        console.print(f"[red]File not found: {input}[/red]")
+        raise typer.Exit(1)
+
+    unsupported = [m for m in models if m not in SUPPORTED_MODELS]
+    if unsupported:
+        console.print(f"[red]Unsupported model(s): {', '.join(unsupported)}[/red]")
+        console.print(f"[dim]v0.3 compare supports: {', '.join(sorted(SUPPORTED_MODELS))}[/dim]")
+        raise typer.Exit(1)
+
+    resolved_device = get_device(device)
+    console.print(f"[bold]Comparing:[/bold] {' vs '.join(models)}")
+    console.print(f"[bold]Input:[/bold] {input_path}")
+    console.print(f"[bold]Device:[/bold] {resolved_device}")
+    console.print()
+
+    detections_by_model: dict = {}
+    image_size: tuple[int, int] | None = None
+    for m in models:
+        console.print(f"[dim]Running {m}...[/dim]")
+        try:
+            dets, size = detect_with_model(m, input_path, conf=conf, device=resolved_device)
+        except Exception as e:
+            console.print(f"[red]Failed running {m}: {e}[/red]")
+            raise typer.Exit(1)
+        image_size = image_size or size
+        detections_by_model[m] = dets
+        console.print(f"  {m}: {len(dets)} detections")
+
+    groups = group_detections(detections_by_model, iou_threshold=iou_threshold)
+    classified = classify_groups(groups, models)
+
+    console.print()
+    console.print(f"[green]Agreements (all models):[/green] {len(classified['agreements'])}")
+    console.print(f"[yellow]Partial agreement:[/yellow] {len(classified['partials'])}")
+    console.print(f"[red]Only one model:[/red] {len(classified['uniques'])}")
+
+    # Write report
+    output_root = Path(output).resolve()
+    output_root.mkdir(parents=True, exist_ok=True)
+    report_name = f"compare_{'_vs_'.join(models)}_{input_path.stem}.html"
+    report_path = output_root / report_name
+    report_path.write_text(
+        build_compare_html(input_path, models, groups, image_size),
+        encoding="utf-8",
+    )
+    console.print(f"\n[bold]Report:[/bold] {report_path}")
+    console.print("[dim]Self-contained HTML. Attach to a tweet or Slack — no server needed.[/dim]")
+
+    if open_browser:
+        import webbrowser
+        webbrowser.open(report_path.as_uri())
+
+
+@app.command()
+def share(
+    job_id: str = typer.Argument(None, help="Job ID prefix to share (default: most recent)"),
+    open_browser: bool = typer.Option(True, "--open/--no-open", help="Open the report in your browser"),
+):
+    """Create a self-contained HTML report for a run. Opens in any browser, no network needed."""
+    from pixo.core.share import create_share_bundle, find_run_dir_by_job
+    from pixo.core.checkpoint import CheckpointManager
+
+    mgr = CheckpointManager()
+    if job_id:
+        matches = [j for j in mgr.list_jobs() if j.job_id.startswith(job_id)]
+        if not matches:
+            console.print(f"[red]No job found matching '{job_id}'[/red]")
+            raise typer.Exit(1)
+        target_job = matches[0]
+    else:
+        jobs = [j for j in mgr.list_jobs() if j.status == "completed"]
+        if not jobs:
+            console.print("[dim]No completed jobs to share. Run a model first.[/dim]")
+            raise typer.Exit(1)
+        target_job = jobs[0]  # most recent
+
+    run_dir = find_run_dir_by_job(target_job.job_id)
+    if not run_dir:
+        console.print(f"[red]Output directory not found for job {target_job.job_id[:8]}[/red]")
+        raise typer.Exit(1)
+
+    try:
+        html_path = create_share_bundle(run_dir)
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    size_mb = html_path.stat().st_size / (1024 * 1024)
+    console.print(f"[green]Share bundle created:[/green] {html_path} ([dim]{size_mb:.1f} MB, self-contained[/dim])")
+    console.print("[dim]Attach this file to a tweet, email, Slack, or GitHub issue. No server needed.[/dim]")
+
+    if open_browser:
+        import webbrowser
+        webbrowser.open(html_path.as_uri())
+
+
+@app.command(name="try")
+def try_cmd(
+    model: str = typer.Option(None, "--model", "-m", help="Model to try (default: auto-pick based on hardware)"),
+    input: str = typer.Option(None, "--input", "-i", help="Input image (default: bundled sample)"),
+):
+    """Run a zero-setup demo to see pixo in action — picks a model, finds a sample image, opens a report."""
+    from pixo.core.sample import get_sample_image
+    from pixo.core.profiler import get_profile
+    from pixo.core.share import create_share_bundle, find_run_dir_by_job
+    from pixo.core.checkpoint import CheckpointManager
+
+    console.print(Panel(
+        "[bold]pixo try[/bold] — one command, zero setup.\n"
+        "Picking a model and a sample image, then running it on your machine.",
+        border_style="cyan",
+    ))
+
+    # 1. Pick a sample image
+    if input:
+        input_path = Path(input)
+        if not input_path.exists():
+            console.print(f"[red]File not found: {input}[/red]")
+            raise typer.Exit(1)
+    else:
+        sample = get_sample_image()
+        if not sample:
+            console.print(
+                "[red]Could not find or download a sample image.[/red]\n"
+                "Provide one with: [cyan]pixo try --input your_photo.jpg[/cyan]"
+            )
+            raise typer.Exit(1)
+        input_path = sample
+        console.print(f"[dim]Sample:[/dim] {input_path.name}")
+
+    # 2. Pick a model based on hardware
+    if not model:
+        profile = get_profile()
+        if profile.has_gpu and profile.gpu_vram_gb and profile.gpu_vram_gb >= 4:
+            model = "yolov11"
+        elif profile.ram_total_gb >= 8:
+            model = "yolov8"
+        else:
+            model = "yolov8"  # smallest variant works on 2GB
+        console.print(f"[dim]Model:[/dim] {model} (auto-picked for your hardware)")
+
+    # 3. Auto-pull if needed and run
+    name, variant_name = _parse_model_name(model)
+    card = _get_card(name)
+    variant = card.get_variant(variant_name)
+    model_path = get_model_path(card.name, variant, variant_name)
+    if not model_path.exists():
+        console.print(f"[yellow]Pulling {model}...[/yellow]")
+        download_model(card, variant_name)
+
+    console.print()
+
+    # Call the run command function directly with minimal args
+    output_dir = str(Path("./pixo_output").resolve())
+
+    try:
+        run(
+            model_name=model,
+            input=str(input_path),
+            output=output_dir,
+            device=None,
+            backend="local",
+            force=False,
+            max_ram=None,
+            max_cpu=None,
+            low_memory=False,
+            background=False,
+            isolate=False,
+            prompt=None,
+            task=None,
+            airgap=False,
+        )
+    except typer.Exit:
+        pass
+
+    # 4. Find the most recent completed job and open a share bundle
+    mgr = CheckpointManager()
+    completed = [j for j in mgr.list_jobs() if j.status == "completed" and j.model == name]
+    if not completed:
+        console.print("\n[yellow]Run finished but no completed job was recorded.[/yellow]")
+        return
+
+    latest = completed[0]
+    run_dir = find_run_dir_by_job(latest.job_id)
+    if not run_dir:
+        return
+
+    try:
+        html_path = create_share_bundle(run_dir)
+    except FileNotFoundError:
+        return
+
+    console.print()
+    console.print(Panel(
+        f"[bold green]Done![/bold green] Your first pixo run is ready.\n\n"
+        f"Report: {html_path}\n"
+        f"Share it: attach the HTML file to a tweet or Slack — it's self-contained.\n\n"
+        f"Try more:\n"
+        f"  [cyan]pixo list[/cyan]                     See all models\n"
+        f"  [cyan]pixo run yolov8 -i <file>[/cyan]    Run on your own file\n"
+        f"  [cyan]pixo compare yolov8 yolov11 -i <file>[/cyan]  Compare two models",
+        title="Welcome to pixo",
+        border_style="green",
+    ))
+
+    import webbrowser
+    webbrowser.open(html_path.as_uri())
 
 
 @app.command(name="env-list")

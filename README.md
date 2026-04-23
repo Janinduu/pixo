@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="logo.svg" alt="pixo — vision, simplified." width="320" />
+  <strong>pixo</strong> — vision, simplified.
 </p>
 
 <p align="center">
-  <strong>Run any computer vision model with one command</strong> — without freezing your laptop, losing progress, or fighting dependency hell.
+  pixo is a runtime layer for computer vision models that lets you run, chain, and manage them as one system on your own machine.
 </p>
 
 <p align="center">
@@ -14,108 +14,182 @@
 
 ```bash
 pip install pixo
-pixo pull yolov8
-pixo run yolov8 --input photo.jpg
+pixo try
 ```
+
+That's it. `pixo try` auto-picks a model for your hardware, finds a sample image, runs it, and opens a browser report. You go from `pip install` to a working result in under a minute.
 
 ## Why pixo?
 
-Running computer vision models (SAM2, YOLO, GroundingDINO, Depth Anything) on your own machine is painful. Your laptop freezes, jobs crash halfway, dependencies conflict, and there's no ETA. pixo fixes all of that.
+Running modern computer vision models locally is messy and fragile. pixo makes it safe, consistent, and easy to use multiple models without crashes, conflicts, or glue code.
 
 | Problem | Without pixo | With pixo |
-|---------|-------------|-----------|
-| Laptop freezes | RAM/CPU maxed out, hard reboot | Resource Guardian caps usage, machine stays responsive |
-| Job crashes at 80% | Start over from zero | Auto-checkpoint, resume from where it stopped |
-| No time estimate | Stare at a blank screen | Pre-run estimate + live ETA |
-| Setup complexity | README with 47 steps | `pixo pull model && pixo run model --input file` |
+|---|---|---|
+| Sensitive data leaks to cloud | Telemetry and version pings phone home | `--airgap` blocks every outbound call — provably local |
+| First run takes 10 minutes | Read docs, pick model, find sample, type 4 commands | `pixo try` — one command, model picked for your hardware |
+| Laptop freezes mid-inference | RAM/CPU maxed out, hard reboot | Resource Guardian caps usage automatically |
+| Job crashes at 80% | Start over from zero | Auto-checkpoint + resume from the last save |
+| Dependency conflicts | Packages break each other | Isolated environments per model |
+| Inconsistent outputs | Every model outputs differently | Standard `results.json` + COCO / CSV exports |
+| Sharing a result is painful | Zip + instructions + hope it opens | `pixo share` → single self-contained HTML file |
 
-## Quick Start
+## Quick start
 
 ```bash
-# Install
 pip install pixo
 
-# See what's available
+# See it work (60-second hero demo)
+pixo try
+
+# Browse models and check your hardware
 pixo list
+pixo doctor
 
-# Download a model
-pixo pull yolov8
-
-# Run it
+# Run any model on your own file
 pixo run yolov8 --input photo.jpg
 pixo run yolov8 --input video.mp4
 
-# Check your hardware
-pixo doctor
-
-# Speed up with ONNX (40% faster on CPU)
+# Speed up with ONNX (~40% faster on CPU)
 pixo optimize yolov8
 ```
 
-## Key Features
+## Supported models
 
-### Resource Guardian
-Your laptop won't freeze. pixo checks resources before running and caps usage during execution.
+Every model carries a privacy badge — all nine bundled models run fully offline after weights are downloaded once.
 
-```bash
-# Safe for low-RAM machines (processes frame-by-frame)
-pixo run yolov8 --input video.mp4 --low-memory
-
-# Work normally while pixo runs in the background
-pixo run yolov8 --input video.mp4 --background
-```
-
-### Free Cloud GPUs
-Too slow locally? Route to free cloud GPUs automatically.
+| Model | Task | Default size |
+|---|---|---|
+| `yolov8` / `yolov11` / `yolov12` | Object detection | 5–7 MB |
+| `rtdetr` | Transformer detection | 64 MB |
+| `grounding_dino` | Text-prompted detection | 341 MB |
+| `florence2` | Vision-language (caption, detect, OCR) | 460 MB |
+| `depth_anything_v2` | Depth estimation | 99 MB |
+| `sam2` | Segmentation | 898 MB |
+| `samurai` | Video tracking + segmentation | 898 MB |
 
 ```bash
-pixo setup-cloud          # Connect Kaggle/Colab (one-time)
-pixo run yolov8 --input video.mp4 --backend kaggle  # Run on GPU for free
+pixo run grounding_dino --input photo.jpg --prompt "red backpack, yellow hat"
+pixo run florence2 --input photo.jpg --task caption
+pixo run depth_anything_v2 --input photo.jpg
 ```
 
-### Smart Routing
-pixo estimates time per backend and picks the fastest option.
+## Key features
+
+### Local-first by design
+```bash
+pixo run yolov8 --input photo.jpg --airgap
+```
+Blocks all outbound network calls for the duration of the run — proves your data never left the machine. Combined with privacy badges on every model card, pixo is the only CV runtime built around "no bytes leave your laptop."
+
+### See where models disagree
+```bash
+pixo compare yolov8 yolov11 yolov12 --input photo.jpg
+```
+Runs multiple detection models on the same image and shows only where they disagree. Agreement / partial / unique detections visualized side-by-side in a shareable HTML report.
+
+### Shareable reports, no server
+```bash
+pixo share
+```
+Exports a run as a single self-contained `.html` file with images embedded. Attach it to a tweet, Slack, or email — anyone can open it in any browser.
+
+### Safe on any laptop
+```bash
+pixo run yolov8 --input video.mp4 --low-memory --background
+```
+Resource Guardian caps RAM, CPU, and GPU usage. `--background` drops priority so your laptop stays responsive while pixo runs.
+
+### Never lose progress
+```bash
+pixo run yolov8 --input long_video.mp4
+# [Ctrl+C pauses, saves checkpoint]
+pixo resume
+```
+Auto-saves every N frames. `Ctrl+C` pauses gracefully instead of killing the process.
+
+### Free cloud GPUs
+```bash
+pixo setup-cloud --kaggle
+pixo run sam2 --input photo.jpg --backend kaggle
+```
+Route heavy models to free Kaggle or Colab GPU. 30 hours/week free on Kaggle.
+
+### Chain models
+```bash
+pixo pipe "grounding_dino -> sam2" --input photo.jpg --prompt "person"
+```
+
+### Browser UIs (optional)
+```bash
+pip install pixo[demo]
+pixo serve yolov8          # Gradio UI for one model
+
+pip install pixo[web]
+pixo ui                    # Full local dashboard
+```
+
+## All commands
 
 ```bash
-pixo run yolov8 --input video.mp4
-# Local (CPU):  ~32 minutes
-# Local (ONNX): ~19 minutes
-# Kaggle (GPU): ~7 minutes  <-- recommended
+pixo try                   # Zero-setup hero demo
+pixo list                  # List models with privacy badges
+pixo info <model>          # Detailed model info
+pixo pull <model>          # Pre-download a model
+pixo run <model> -i <f>    # Run inference
+pixo compare <m1> <m2> ... # Cross-model disagreement browser
+pixo share [job_id]        # Export self-contained HTML report
+pixo serve <model>         # Gradio browser UI
+pixo ui                    # Full web dashboard
+pixo pipe "m1 -> m2"       # Chain models
+pixo doctor                # Check hardware
+pixo optimize <model>      # ONNX conversion (~40% faster CPU)
+pixo history               # Show past jobs
+pixo resume [job_id]       # Resume a paused job
+pixo view <job_id>         # Open a job's output folder
+pixo setup-cloud           # Connect Kaggle / Colab
+pixo cloud-status          # Cloud backend status
+pixo rm <model>            # Remove a downloaded model
+pixo upgrade               # Update pixo
+pixo guide                 # In-terminal usage guide
 ```
 
-## Supported Models
+## Python SDK
 
-| Model | Task | Status |
-|-------|------|--------|
-| YOLOv8 | Object detection | Working |
-| SAM2 | Image segmentation | Model card ready |
-| GroundingDINO | Open-set detection | Model card ready |
-| SAMURAI | Video tracking + segmentation | Model card ready |
-| Depth Anything V2 | Depth estimation | Model card ready |
-| Florence-2 | Vision-language | Model card ready |
+```python
+import pixo
 
-## Commands
+result = pixo.run("yolov8", input="photo.jpg")
+print(result.objects, result.classes, result.time_seconds)
 
-```bash
-pixo pull <model>              # Download a model
-pixo run <model> --input <file>  # Run inference
-pixo list                      # List available models
-pixo info <model>              # Show model details
-pixo doctor                    # Check hardware
-pixo optimize <model>          # Convert to ONNX
-pixo setup-cloud               # Connect cloud accounts
-pixo cloud-status              # Check cloud connections
-pixo rm <model>                # Remove a downloaded model
+result = pixo.run("grounding_dino", input="photo.jpg", prompt="red car")
+result = pixo.run("sam2", input="photo.jpg", backend="kaggle")
+
+hw = pixo.doctor()
+print(hw["ram_total_gb"], hw["has_gpu"])
 ```
 
-## Adding a Model
+## Adding a model
 
-pixo uses a plugin system. Each model is defined by two files:
+pixo uses a plugin system. Each model is two files:
 
 ```
 pixo/models/cards/your_model/
-  modelcard.yaml   # Model metadata, dependencies, hardware requirements
+  modelcard.yaml   # Metadata, dependencies, hardware, privacy
   run.py           # Two functions: setup() and run()
+```
+
+## Optional installs
+
+pixo keeps the base install minimal. Pull only what you need:
+
+```bash
+pip install pixo[yolo]     # YOLO family (Ultralytics + OpenCV)
+pip install pixo[onnx]     # ONNX Runtime for faster CPU
+pip install pixo[vision]   # Grounding DINO / Florence-2 / SAM2
+pip install pixo[cloud]    # Kaggle backend
+pip install pixo[demo]     # Gradio for pixo serve
+pip install pixo[web]      # FastAPI + uvicorn for pixo ui
+pip install pixo[all]      # Everything
 ```
 
 ## Development
@@ -125,6 +199,13 @@ git clone https://github.com/Janinduu/pixo.git
 cd pixo
 pip install -e .
 ```
+
+## Documentation
+
+Detailed feature guides live in [`docs/`](docs/):
+
+- [Features summary](docs/pixo_features_summary.docx) — one-page reference
+- [Features explained](docs/pixo_features_detailed.docx) — full guide with why / what / how
 
 ## License
 

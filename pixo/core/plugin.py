@@ -46,6 +46,19 @@ class ModelCheckpoint:
 
 
 @dataclass
+class ModelPrivacy:
+    """Privacy posture — can this model run fully offline?
+
+    level: "green" runs fully offline after weights are downloaded once.
+           "yellow" needs network on first pull but runs offline after.
+           "red" requires runtime network access (API calls, remote services).
+    note:  optional short human-readable explanation.
+    """
+    level: str = "yellow"
+    note: str = ""
+
+
+@dataclass
 class ModelCard:
     name: str
     description: str
@@ -59,6 +72,7 @@ class ModelCard:
     variants: dict[str, ModelVariant] = field(default_factory=dict)
     dependencies: dict = field(default_factory=dict)
     checkpoint: ModelCheckpoint = field(default_factory=ModelCheckpoint)
+    privacy: ModelPrivacy = field(default_factory=ModelPrivacy)
 
     @property
     def default_variant(self) -> ModelVariant:
@@ -126,6 +140,12 @@ def _parse_card(data: dict) -> ModelCard:
         every=ckpt_data.get("every", 100),
     )
 
+    priv_data = data.get("privacy", {}) or {}
+    privacy = ModelPrivacy(
+        level=priv_data.get("level", "yellow"),
+        note=priv_data.get("note", ""),
+    )
+
     return ModelCard(
         name=data["name"],
         description=data.get("description", ""),
@@ -139,6 +159,7 @@ def _parse_card(data: dict) -> ModelCard:
         variants=variants,
         dependencies=data.get("dependencies", {}),
         checkpoint=checkpoint,
+        privacy=privacy,
     )
 
 

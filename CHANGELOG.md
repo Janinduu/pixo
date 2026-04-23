@@ -4,6 +4,59 @@ All notable changes to pixo will be documented in this file.
 
 ---
 
+## v0.3.0 (2026-04-23)
+
+**The hero-moment release — zero-setup demo, shareable reports, airgap mode, and cross-model comparison.**
+
+### `pixo try` — zero-argument demo
+One command takes a new user from install to a working result in under a minute.
+- Auto-picks a model based on the user's hardware (GPU → yolov11, CPU → yolov8).
+- Finds a sample image (bundled with ultralytics, or cached in `~/.pixo/samples/`).
+- Auto-pulls the model if needed, runs it, opens a browser report.
+- Usage: `pixo try` (no flags needed). Override with `--model` or `--input`.
+
+### `pixo share` — self-contained HTML reports
+Produce a single `.html` file with results, visualizations, and provenance baked in as base64. Opens in any browser with zero network requests.
+- `pixo share` shares the most recent completed run.
+- `pixo share <job_id>` shares a specific job.
+- Output: `~/.pixo/shares/<job_id>.html` — attach to a tweet, Slack, or email.
+
+### `pixo compare` — disagreement browser
+Run multiple detection models on one image and see only where they disagree.
+- `pixo compare yolov8 yolov11 yolov12 --input photo.jpg`
+- Classifies each detection as agreement (all models found it), partial (some did), or unique (only one did).
+- Produces a standalone HTML report with colored overlays per model.
+- v0.3 scope: image inputs and Ultralytics detection models (yolov8/11/12, rtdetr). Video + segmentation compare planned for v0.4.
+
+### `--airgap` mode
+Hard-block all outbound network calls during a run.
+- `pixo run yolov8 --input photo.jpg --airgap`
+- Monkey-patches `socket.connect` and `getaddrinfo` to block non-loopback traffic.
+- Raises `AirgapViolation` if any code tries to reach the internet.
+- Incompatible with `--backend kaggle/colab` (by design).
+
+### Privacy badges on model cards
+Each model card now declares its privacy posture:
+- **green** — runs fully offline after initial weight download
+- **yellow** — needs network for first pull, offline afterward
+- **red** — requires runtime network access (API calls, remote services)
+- Surfaced in `pixo list` and `pixo info`.
+- All nine bundled models are **green**.
+
+### `pixo serve` — instant browser UI
+One command spins up a Gradio UI for any model.
+- `pixo serve yolov8` → http://localhost:7860
+- Drag-drop an image, see annotated result and summary.
+- Auto-shows a prompt field for grounding_dino and task dropdown for florence2.
+- Requires the new `pixo[demo]` extra: `pip install pixo[demo]`.
+
+### Other
+- New core modules: `pixo/core/sample.py`, `pixo/core/share.py`, `pixo/core/airgap.py`, `pixo/core/compare.py`.
+- `pyproject.toml`: new `demo` extra for Gradio.
+- Model card schema: new optional `privacy:` section.
+
+---
+
 ## v0.2.0 (2026-04-08)
 
 **All models working + isolated environments + model piping.**

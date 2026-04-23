@@ -29,13 +29,27 @@ pixo_output/
 *.avi
 *.mp4
 
-# Test videos (too large for git)
+# Media / large assets (live in pixo-internal, not public repo)
 videos/
+*.pt
+*.onnx
+*.safetensors
+
+# Internal files (live in pixo-internal)
+website/
+CLAUDE.md
+logo.svg
+PIXO_FEATURES.docx
+PIXO_FEATURES.pdf
+build_features_doc.py
+docs/pixo_differentiation_roadmap.md
+docs/pixo_v0.3_todo.md
+docs/pixo_summary.pdf
+docs/PIXO_FEATURES.pdf
 
 # Logs
 *.log
 test_v2*
 test_kaggle*
 kaggle_debug*
-test_output/
 node_modules/

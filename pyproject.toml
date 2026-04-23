@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixo"
-version = "0.2.0"
+version = "0.3.0"
 description = "Vision, simplified. Run any computer vision model with one command."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -39,7 +39,8 @@ onnx = ["onnxruntime>=1.16.0"]
 cloud = ["kaggle>=1.6.0"]
 vision = ["transformers>=4.40.0", "torch>=2.0", "opencv-python>=4.8.0", "matplotlib>=3.7"]
 web = ["fastapi>=0.100.0", "uvicorn>=0.23.0", "python-multipart>=0.0.6"]
-all = ["pixo[yolo,onnx,cloud,vision,web]"]
+demo = ["gradio>=4.0.0"]
+all = ["pixo[yolo,onnx,cloud,vision,web,demo]"]
 
 [project.urls]
 Homepage = "https://github.com/Janinduu/pixo"

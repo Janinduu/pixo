@@ -57,3 +57,6 @@ variants:
 checkpoint:
   supported: true
   every: 100
+privacy:
+  level: green
+  note: "Runs fully offline after weights are downloaded."
