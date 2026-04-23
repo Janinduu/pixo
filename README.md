@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="logo.svg" alt="pixo" width="96" />
+</p>
+
+<p align="center">
   <strong>pixo</strong> — vision, simplified.
 </p>
 
