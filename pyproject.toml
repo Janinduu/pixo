@@ -52,3 +52,15 @@ pixo = "pixo.cli:app"
 
 [tool.setuptools.packages.find]
 include = ["pixo*"]
+exclude = ["pixo.server.ui*", "*.node_modules*", "*.dist*"]
+
+[tool.setuptools.package-data]
+"pixo.models.cards.depth_anything_v2" = ["modelcard.yaml"]
+"pixo.models.cards.florence2" = ["modelcard.yaml"]
+"pixo.models.cards.grounding_dino" = ["modelcard.yaml"]
+"pixo.models.cards.rtdetr" = ["modelcard.yaml"]
+"pixo.models.cards.sam2" = ["modelcard.yaml"]
+"pixo.models.cards.samurai" = ["modelcard.yaml"]
+"pixo.models.cards.yolov8" = ["modelcard.yaml"]
+"pixo.models.cards.yolov11" = ["modelcard.yaml"]
+"pixo.models.cards.yolov12" = ["modelcard.yaml"]
