@@ -21,6 +21,25 @@ app = typer.Typer(
 console = Console()
 
 
+def _version_callback(value: bool):
+    if value:
+        from pixo import __version__
+        console.print(f"pixo {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _root(
+    version: bool = typer.Option(
+        False, "--version", "-V",
+        callback=_version_callback,
+        is_eager=True,
+        help="Show the version and exit.",
+    ),
+):
+    """pixo — run any computer vision model with one command."""
+
+
 def _parse_model_name(model_str: str) -> tuple[str, str | None]:
     """Parse 'sam2:lite' into ('sam2', 'lite'). Plain 'sam2' returns ('sam2', None)."""
     if ":" in model_str:

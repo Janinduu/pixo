@@ -4,6 +4,14 @@ All notable changes to pixo will be documented in this file.
 
 ---
 
+## v0.3.1 (2026-04-24)
+
+**Patch release.**
+
+- Add `pixo --version` / `pixo -V` flag to print the installed version and exit.
+
+---
+
 ## v0.3.0 (2026-04-23)
 
 **The hero-moment release — zero-setup demo, shareable reports, airgap mode, and cross-model comparison.**
