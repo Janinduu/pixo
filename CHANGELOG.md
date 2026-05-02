@@ -4,6 +4,18 @@ All notable changes to pixo will be documented in this file.
 
 ---
 
+## v0.3.3 (2026-05-03)
+
+**Real airgap fix for HuggingFace transformers models.**
+
+Discovered while testing v0.3.2 that `--airgap` was still leaking on `depth_anything_v2`, `grounding_dino`, `florence2`, `sam2`, and `samurai`. Root cause: `huggingface_hub` reads `HF_HUB_OFFLINE` once at module import time (in its `constants.py`). Pixo's CLI was importing `huggingface_hub` transitively (via `pixo.core.downloader`) before the airgap context could set the env var, so the offline mode was a no-op for HF-backed runners.
+
+### Fix
+- **Set offline env vars at the very top of `pixo/cli.py`** — before any `huggingface_hub` import. If `--airgap` is anywhere in `sys.argv`, `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE`, `HF_DATASETS_OFFLINE`, and `YOLO_OFFLINE` are all set immediately. This means transformers picks up offline mode from the start of the process, not just inside the airgap context.
+- **New pre-flight check** for HF transformers models: even when the model's weight file exists, the model's processor/config might not be in the HF cache yet. If `--airgap` is requested and the HF cache directory doesn't contain the model, refuse with a friendly message ("Run once without --airgap so transformers can populate its cache").
+
+---
+
 ## v0.3.2 (2026-05-02)
 
 **Stress-test patch — surfaced and fixed a batch of real-world friction points found while exercising v0.3 end-to-end.**

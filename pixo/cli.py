@@ -1,5 +1,16 @@
 """pixo CLI — main entry point."""
 
+# IMPORTANT: airgap env vars must be set BEFORE huggingface_hub is imported,
+# because it reads them at module-load time (in its constants.py).
+# downloader.py below imports huggingface_hub, so we have to do this first.
+import os
+import sys
+if "--airgap" in sys.argv:
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+    os.environ.setdefault("HF_DATASETS_OFFLINE", "1")
+    os.environ.setdefault("YOLO_OFFLINE", "True")
+
 import time
 from pathlib import Path
 
@@ -79,6 +90,29 @@ def _suggest_video_alternative(model_name: str) -> str | None:
     if model_name in {"sam2"}:
         return "samurai"
     return None
+
+
+# Models that pull additional config from HuggingFace at runtime (not just weights).
+# Even if their pixo-tracked weights file exists, transformers may still need to
+# fetch a processor/config from HF Hub on first run.
+_HF_TRANSFORMERS_MODELS = {"depth_anything_v2", "grounding_dino", "florence2", "sam2", "samurai"}
+
+
+def _hf_cache_has_model(card: ModelCard) -> bool:
+    """Best-effort check: does the HuggingFace cache contain this model?
+
+    Returns True if the model's HF repo appears in the local hub cache.
+    Used by --airgap pre-flight to refuse runs that would hit the network.
+    """
+    repo = card.huggingface_repo
+    if not repo:
+        return True  # No HF repo declared — assume it's fine
+    hub_cache = Path.home() / ".cache" / "huggingface" / "hub"
+    if not hub_cache.exists():
+        return False
+    # HF cache stores models as: models--<org>--<repo>
+    expected_dir_name = "models--" + repo.replace("/", "--")
+    return (hub_cache / expected_dir_name).exists()
 
 
 # --- Commands ---
@@ -183,6 +217,18 @@ def run(
             f"  [cyan]{model_name}[/cyan] is not on this machine yet.\n"
             f"  Run once without --airgap to fetch the weights:\n"
             f"    [cyan]pixo pull {model_name}[/cyan]\n"
+            f"  Then re-run with --airgap."
+        )
+        raise typer.Exit(1)
+
+    # 4. Airgap + HF transformers model: even if the weight file exists, transformers
+    #    needs the processor/config cached too. Refuse if the HF cache doesn't have it.
+    if airgap and name in _HF_TRANSFORMERS_MODELS and not _hf_cache_has_model(card):
+        console.print(
+            f"[red]--airgap requires the full HuggingFace cache for [cyan]{model_name}[/cyan].[/red]\n"
+            f"  The weights are present, but the model's processor/config has not been cached yet.\n"
+            f"  Run once without --airgap so transformers can populate its cache:\n"
+            f"    [cyan]pixo run {model_name} --input {input_path.name}[/cyan]\n"
             f"  Then re-run with --airgap."
         )
         raise typer.Exit(1)
