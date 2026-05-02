@@ -4,6 +4,27 @@ All notable changes to pixo will be documented in this file.
 
 ---
 
+## v0.3.2 (2026-05-02)
+
+**Stress-test patch — surfaced and fixed a batch of real-world friction points found while exercising v0.3 end-to-end.**
+
+### Routing and pre-flight checks
+- **Video + cloud:** the Kaggle/Colab backends in v0.3 only support image inputs. Pixo now refuses video-to-cloud routing pre-flight with a clear message and a `--backend local` suggestion, instead of silently failing inside the kernel script.
+- **Smart router fallback:** when the router auto-recommends cloud for a video input, it now falls back to local with a notice, rather than queueing a doomed cloud run.
+- **Model + input mismatch:** running `sam2` on a video now fails fast and points to `samurai` (designed for video). Same pattern for other image-only models.
+- **Airgap + un-pulled weights:** running with `--airgap` on a model that isn't downloaded yet now fails fast with a friendly message ("run once without --airgap to fetch weights"), instead of dumping a 200-line Ultralytics traceback.
+
+### Cloud history and sharing
+- **Cloud runs in `pixo history`:** runs routed to Kaggle/Colab are now tracked as checkpointed jobs, so they show up in `pixo history`, can be opened with `pixo view`, and can be exported with `pixo share`.
+- **`pixo share` error message:** when an old job's output directory has been deleted, `pixo share` now explains *why* (with the expected path and date) instead of just "output directory not found".
+
+### Quality and packaging
+- **Logo on PyPI:** the README's logo path is now an absolute GitHub URL, so the PyPI project page renders it correctly.
+- **Kaggle dependency:** pinned to `kaggle>=2.0.2` to silence the outdated-version warning that was appearing on every cloud run.
+- **Kernel log on Windows:** suppressed the misleading "could not save kernel log (encoding issue)" message — the actual results were always downloading fine; only the optional log was affected.
+
+---
+
 ## v0.3.1 (2026-04-24)
 
 **Patch release.**

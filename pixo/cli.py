@@ -57,6 +57,30 @@ def _get_card(name: str) -> ModelCard:
         raise typer.Exit(1)
 
 
+_VIDEO_SUFFIXES = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
+
+
+def _is_video(path: Path) -> bool:
+    return path.suffix.lower() in _VIDEO_SUFFIXES
+
+
+# Models whose Kaggle/Colab backends only support image inputs in v0.3.
+# Routing video to these on cloud will fail; we refuse pre-flight.
+_CLOUD_VIDEO_INCAPABLE = {"yolov8", "yolov11", "yolov12", "rtdetr",
+                         "grounding_dino", "florence2", "depth_anything_v2",
+                         "sam2", "samurai"}
+
+# Models that don't support video input at all (even locally).
+_VIDEO_INCAPABLE_MODELS = {"sam2", "depth_anything_v2", "florence2"}
+
+
+def _suggest_video_alternative(model_name: str) -> str | None:
+    """Return a suggested model name when the requested one can't handle video."""
+    if model_name in {"sam2"}:
+        return "samurai"
+    return None
+
+
 # --- Commands ---
 
 
@@ -126,7 +150,44 @@ def run(
     variant = card.get_variant(variant_name)
     model_path = get_model_path(card.name, variant, variant_name)
 
-    # Auto-pull if not downloaded
+    # --- Pre-flight: model + input compatibility ---
+    is_video_input = _is_video(input_path)
+
+    # 1. Some models simply don't accept video inputs.
+    if is_video_input and name in _VIDEO_INCAPABLE_MODELS:
+        alt = _suggest_video_alternative(name)
+        console.print(f"[red]{name} doesn't support video input.[/red]")
+        if alt:
+            console.print(
+                f"  For video tracking + segmentation, use: "
+                f"[cyan]pixo run {alt} --input {input_path.name}[/cyan]"
+            )
+        else:
+            console.print(f"  Try a still image instead, or pick a video-capable model with [cyan]pixo list[/cyan].")
+        raise typer.Exit(1)
+
+    # 2. Cloud backends in v0.3 only support image inputs.
+    if is_video_input and backend in ("kaggle", "colab"):
+        console.print(
+            f"[red]The cloud backend currently supports image inputs only.[/red]\n"
+            f"  Run locally: [cyan]pixo run {model_name} --input {input_path.name} --backend local[/cyan]\n"
+            f"  Or extract a frame and use that as input."
+        )
+        raise typer.Exit(1)
+
+    # 3. Airgap mode requires the model weights to already be on disk.
+    #    Without this check, ultralytics tries to fetch and we get an ugly traceback.
+    if airgap and not model_path.exists():
+        console.print(
+            f"[red]--airgap requires the model to be downloaded already.[/red]\n"
+            f"  [cyan]{model_name}[/cyan] is not on this machine yet.\n"
+            f"  Run once without --airgap to fetch the weights:\n"
+            f"    [cyan]pixo pull {model_name}[/cyan]\n"
+            f"  Then re-run with --airgap."
+        )
+        raise typer.Exit(1)
+
+    # Auto-pull if not downloaded (skipped above if airgap)
     if not model_path.exists():
         console.print(f"[yellow]{model_name} not found locally, pulling...[/yellow]")
         download_model(card, variant_name)
@@ -151,18 +212,42 @@ def run(
         force_backend=backend,
     )
 
-    if chosen == "kaggle":
-        if not cloud_config.kaggle.is_configured:
-            console.print("[red]Kaggle not configured. Run: pixo setup-cloud --kaggle[/red]")
-            raise typer.Exit(1)
-        from pixo.cloud.kaggle_backend import run_on_kaggle
-        run_on_kaggle(input_path, Path(output), name,
-                      cloud_config.kaggle.username, cloud_config.kaggle.api_key)
-        return
+    # The smart router doesn't yet know cloud backends are image-only.
+    # If it auto-recommended cloud for a video, fall back to local.
+    if is_video_input and chosen in ("kaggle", "colab"):
+        console.print(
+            f"[yellow]Note:[/yellow] cloud backend is image-only in v0.3, "
+            f"running locally instead. (May be slow.)"
+        )
+        chosen = "local"
 
-    if chosen == "colab":
-        from pixo.cloud.colab_backend import run_on_colab
-        run_on_colab(input_path, Path(output), name)
+    if chosen in ("kaggle", "colab"):
+        # Track cloud runs in history so pixo history / pixo share work for them.
+        from pixo.core.checkpoint import CheckpointManager
+        ckpt_mgr = CheckpointManager()
+        cloud_job = ckpt_mgr.create_job(
+            model=name, variant=variant.filename, input_path=str(input_path),
+            output_dir=str(Path(output).resolve()), device=f"cloud:{chosen}",
+        )
+        try:
+            if chosen == "kaggle":
+                if not cloud_config.kaggle.is_configured:
+                    console.print("[red]Kaggle not configured. Run: pixo setup-cloud --kaggle[/red]")
+                    ckpt_mgr.mark_failed(cloud_job)
+                    raise typer.Exit(1)
+                from pixo.cloud.kaggle_backend import run_on_kaggle
+                run_on_kaggle(input_path, Path(output), name,
+                              cloud_config.kaggle.username, cloud_config.kaggle.api_key)
+            else:  # colab
+                from pixo.cloud.colab_backend import run_on_colab
+                run_on_colab(input_path, Path(output), name)
+            ckpt_mgr.mark_completed(cloud_job)
+        except typer.Exit:
+            raise
+        except Exception as e:
+            ckpt_mgr.mark_failed(cloud_job)
+            console.print(f"[red]Cloud run failed:[/red] {e}")
+            raise typer.Exit(1)
         return
 
     # --- Local execution via plugin system ---
@@ -1253,7 +1338,15 @@ def share(
 
     run_dir = find_run_dir_by_job(target_job.job_id)
     if not run_dir:
-        console.print(f"[red]Output directory not found for job {target_job.job_id[:8]}[/red]")
+        from datetime import datetime
+        when = datetime.fromtimestamp(target_job.updated_at).strftime("%Y-%m-%d") if target_job.updated_at else "unknown"
+        console.print(
+            f"[red]Output for job {target_job.job_id[:8]} is no longer on disk.[/red]\n"
+            f"  Job was completed on [cyan]{when}[/cyan].\n"
+            f"  Expected at: [dim]{target_job.output_dir}[/dim]\n"
+            f"  The folder may have been moved or deleted.\n"
+            f"  See available outputs with: [cyan]pixo history[/cyan]"
+        )
         raise typer.Exit(1)
 
     try:

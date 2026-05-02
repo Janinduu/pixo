@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.svg" alt="pixo" width="96" />
+  <img src="https://raw.githubusercontent.com/Janinduu/pixo/main/logo.svg" alt="pixo" width="96" />
 </p>
 
 <p align="center">

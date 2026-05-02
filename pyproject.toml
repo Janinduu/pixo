@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pixo"
-version = "0.3.1"
+version = "0.3.2"
 description = "Vision, simplified. Run any computer vision model with one command."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -36,7 +36,7 @@ dependencies = [
 [project.optional-dependencies]
 yolo = ["ultralytics>=8.0.0", "opencv-python>=4.8.0"]
 onnx = ["onnxruntime>=1.16.0"]
-cloud = ["kaggle>=1.6.0"]
+cloud = ["kaggle>=2.0.2"]
 vision = ["transformers>=4.40.0", "torch>=2.0", "opencv-python>=4.8.0", "matplotlib>=3.7"]
 web = ["fastapi>=0.100.0", "uvicorn>=0.23.0", "python-multipart>=0.0.6"]
 demo = ["gradio>=4.0.0"]

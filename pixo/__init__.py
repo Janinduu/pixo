@@ -1,6 +1,6 @@
 """pixo — Run any computer vision model with one command."""
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 
 from pixo.api import list_models, pull, run, doctor, pipe, RunResult, ModelInfo
 

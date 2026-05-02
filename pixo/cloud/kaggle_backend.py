@@ -292,9 +292,10 @@ def _download_output(api, kernel_id: str, output_dir: str):
             username, slug = kernel_id.split("/", 1)
             api.kernels_output(user_name=username, kernel_slug=slug, path=output_dir, quiet=True)
         except UnicodeEncodeError:
-            # Kaggle logs contain Unicode progress bars that fail on Windows cp1252
-            # Download without log — the actual output files are what we need
-            console.print("[dim]Note: Could not save kernel log (encoding issue), results downloaded.[/dim]")
+            # Kaggle log contains Unicode progress bars that fail on Windows cp1252.
+            # The result files themselves download fine via a separate path below.
+            # Quietly skip the log — it's not essential. Run already succeeded.
+            pass
     finally:
         if old_encoding is None:
             os.environ.pop("PYTHONUTF8", None)
