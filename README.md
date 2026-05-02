@@ -11,9 +11,9 @@
 </p>
 
 <p align="center">
-  <a href="https://pypi.org/project/pixo/"><img src="https://img.shields.io/pypi/v/pixo?color=7F77DD&style=flat-square" alt="PyPI" /></a>
-  <a href="https://pypi.org/project/pixo/"><img src="https://img.shields.io/pypi/pyversions/pixo?color=7F77DD&style=flat-square" alt="Python" /></a>
-  <a href="https://github.com/Janinduu/pixo/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Janinduu/pixo?color=7F77DD&style=flat-square" alt="License" /></a>
+  <a href="https://pypi.org/project/pixo/"><img src="https://img.shields.io/pypi/v/pixo?color=7F77DD&style=flat-square&cacheSeconds=60" alt="PyPI" /></a>
+  <a href="https://pypi.org/project/pixo/"><img src="https://img.shields.io/pypi/pyversions/pixo?color=7F77DD&style=flat-square&cacheSeconds=300" alt="Python" /></a>
+  <a href="https://github.com/Janinduu/pixo/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Janinduu/pixo?color=7F77DD&style=flat-square&cacheSeconds=300" alt="License" /></a>
 </p>
 
 ```bash
