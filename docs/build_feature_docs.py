@@ -144,7 +144,7 @@ def build_summary():
     d.p("Quick reference for everything pixo can do. For the full explanation "
         "of each feature (why it exists, what it does, how to use), see "
         "pixo_features_detailed.docx.")
-    d.dim("Current version: v0.3.0")
+    d.dim("Current version: v0.3.3")
     d.hr()
 
     # Commands table
@@ -175,6 +175,7 @@ def build_summary():
             ["pixo env-clean <model>", "Remove a model's isolated environment."],
             ["pixo upgrade", "Update pixo to the latest version."],
             ["pixo guide", "Print the in-terminal usage guide."],
+            ["pixo --version, -V", "Print the installed pixo version and exit."],
         ],
         col_widths=[2.4, 4.2],
     )
@@ -247,6 +248,8 @@ def build_summary():
     d.bullet("Smart router — estimates local vs cloud time before running")
     d.bullet("Kaggle backend — fully automated, uses free 30 hrs/week")
     d.bullet("Colab backend — notebook generation for free T4 GPU")
+    d.bullet("v0.3 limitation: cloud backends are image-only; video inputs run locally")
+    d.bullet("Cloud runs appear in pixo history and work with pixo share (since v0.3.2)")
 
     d.h3("Pipelines")
     d.bullet("Model piping — pixo pipe \"grounding_dino -> sam2\" chains models")
@@ -344,7 +347,7 @@ def build_detailed():
     d.p("Every feature in pixo, explained in plain English.")
     d.p("For each feature: why it exists, what it does, how to use it. "
         "For a one-page overview instead, see pixo_features_summary.docx.")
-    d.dim("Current version: v0.3.0")
+    d.dim("Current version: v0.3.3")
     d.hr()
 
     # TOC
@@ -440,6 +443,7 @@ def build_detailed():
     )
     d.bold_line("What happens under the hood")
     d.bullet("Checks the input file exists.")
+    d.bullet("Pre-flight checks: refuses incompatible combinations (e.g. video on cloud, sam2 on video, --airgap on a model that isn't pulled) with a clear suggestion.")
     d.bullet("Checks if the model is downloaded. If not, pulls from HuggingFace.")
     d.bullet("Runs a resource safety check (RAM, disk, CPU temperature).")
     d.bullet("Picks a backend — local, or a cloud GPU if configured.")
@@ -542,19 +546,21 @@ def build_detailed():
         "internet — medical images, legal documents, confidential photos — "
         "you add one flag.")
     d.bold_line("What it does")
-    d.bullet("Sets environment variables (HF_HUB_OFFLINE=1, TRANSFORMERS_OFFLINE=1, YOLO_OFFLINE=True) so libraries skip their connectivity checks.")
+    d.bullet("Sets offline environment variables (HF_HUB_OFFLINE=1, TRANSFORMERS_OFFLINE=1, HF_DATASETS_OFFLINE=1, YOLO_OFFLINE=True) at process start, so HuggingFace and Ultralytics skip every connectivity check.")
     d.bullet("Monkey-patches ultralytics.utils.checks.check_online so YOLO doesn't ping 1.1.1.1 before running.")
     d.bullet("Monkey-patches Python's socket and DNS functions so any outbound connection raises AirgapViolation.")
-    d.bullet("Reverts all patches when the run finishes — system network is untouched afterward.")
+    d.bullet("Reverts all patches when the run finishes — your system network is untouched afterward.")
     d.p("Only loopback (127.0.0.1) stays allowed, so local services keep working.")
+    d.bold_line("Pre-flight refusals (so you never see ugly tracebacks)")
+    d.p("Pixo checks a few things before entering the airgap context:")
+    d.bullet("If the model's weights aren't pulled yet, --airgap is refused with a friendly message: \"Run once without --airgap to fetch the weights, then re-run with --airgap.\"")
+    d.bullet("If the model uses HuggingFace transformers (depth_anything_v2, grounding_dino, florence2, sam2, samurai) and the HuggingFace cache hasn't been populated yet, --airgap is refused with a similar suggestion. This catches the case where you have the .pt file but transformers also needs a processor/config from HF Hub.")
+    d.bullet("--airgap cannot be combined with --backend kaggle or --backend colab — those need network by definition.")
     d.bold_line("How to use it")
     d.code_block("pixo run yolov8 --input photo.jpg --airgap")
     d.p("You'll see \"Airgap: network access blocked for this run\" in the "
-        "output. If anything inside the run tries to dial out, it'll fail "
+        "output. If anything inside the run still tries to dial out, it fails "
         "fast with a clear error telling you which host was blocked.")
-    d.bold_line("Combines with")
-    d.p("You cannot combine --airgap with --backend kaggle or --backend colab "
-        "— those need network by definition. pixo will refuse with a clear error.")
     d.hr()
 
     # ---------- 6 ----------
@@ -581,6 +587,12 @@ def build_detailed():
     )
     d.p("The file is saved to ~/.pixo/shares/<job_id>.html. Attach it to a "
         "tweet, Slack message, email, or GitHub issue.")
+    d.bold_line("Works for every model and every backend")
+    d.p("pixo share doesn't care which model produced the run — it just reads "
+        "the standard output folder. So the same command works for a YOLO image "
+        "run, a SAM2 segmentation, a Florence-2 caption, or a depth map. As of "
+        "v0.3.2, cloud runs (Kaggle/Colab) are also tracked in history and can "
+        "be exported with pixo share.")
     d.hr()
 
     # ---------- 7 ----------
@@ -755,6 +767,14 @@ def build_detailed():
     d.p("Some models (SAM2, SAMURAI, Grounding DINO, Florence-2 on video) are "
         "painfully slow on CPU. Instead of asking users to pay for AWS, pixo "
         "wires up two free options that anyone can use.")
+    d.bold_line("v0.3 limitation: cloud is image-only")
+    d.p("In v0.3, the Kaggle and Colab backends only support image inputs. If "
+        "you try --backend kaggle on a video, pixo refuses pre-flight with a "
+        "clear message and points you to local execution. Cloud video support "
+        "is planned for v0.4.")
+    d.p("Cloud runs are now tracked in pixo history (added in v0.3.2), so they "
+        "show up in pixo history, can be opened with pixo view, and exported "
+        "with pixo share like any local run.")
 
     d.h3("Kaggle backend")
     d.p("Kaggle gives every account 30 hours per week of free T4 GPU.")
@@ -920,6 +940,10 @@ def build_detailed():
     d.p("Delete a downloaded model to free disk space.")
     d.code_block("pixo rm sam2\npixo rm sam2:tiny    # specific variant")
 
+    d.h3("pixo --version  /  pixo -V")
+    d.p("Print the installed pixo version and exit.")
+    d.code_block("pixo --version\npixo -V")
+
     d.h3("pixo upgrade")
     d.p("Update pixo itself to the latest version.")
     d.code_block("pixo upgrade")
@@ -996,7 +1020,7 @@ def build_detailed():
     )
     d.hr()
 
-    d.p("That's all of pixo v0.3.0. For the one-page summary, see "
+    d.p("That's all of pixo v0.3.3. For the one-page summary, see "
         "pixo_features_summary.docx. For the strategic roadmap, see "
         "pixo_differentiation_roadmap.md. For what's planned next, see "
         "pixo_v0.3_todo.md.")
